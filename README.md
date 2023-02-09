@@ -1,43 +1,56 @@
-v<p align="center">
-  <img src="https://raw.githubusercontent.com/dbt-labs/dbt/ec7dee39f793aa4f7dd3dae37282cc87664813e4/etc/dbt-logo-full.svg" alt="dbt logo" width="500"/>
-</p>
+# dbt-risingwave
 
-**[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
+A [RisingWave](https://github.com/risingwavelabs/risingwave) 
+adapter plugin for [dbt](https://www.getdbt.com/).
 
-dbt is the T in ELT. Organize, cleanse, denormalize, filter, rename, and pre-aggregate the raw data in your warehouse so that it's ready for analysis.
+**RisingWave** is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. 
 
-## RisingWave
-This repo contains the base code to help you start to build out your dbt-risingwave adapter plugin, for more information on how to build out the adapter please follow the [docs](https://docs.getdbt.com/docs/contributing/building-a-new-adapter)
+**dbt** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
-** Note ** this `README` is meant to be replaced with what information would be required to use your adpater once your at a point todo so.
+**NOTICE**
 
-** Note **
-### Adapter Scaffold default Versioning
-This adapter plugin follows [semantic versioning](https://semver.org/). The first version of this plugin is v0.0.1, in order to be compatible with dbt Core v0.0.1.
+The adapter (dbt-risingwave) is in very early stage and it just works. However, it does not currently guarantee backward compatibility currently.
 
-It's also brand new! For RisingWave-specific functionality, we will aim for backwards-compatibility wherever possible. We are likely to be iterating more quickly than most major-version-1 software projects. To that end, backwards-incompatible changes will be clearly communicated and limited to minor versions (once every three months).
+## Getting started
 
- ## Getting Started
+The package has not been published to PyPI, please install it via git.
 
- #### Setting up Locally
-- run `pip install -r dev-requirements.txt`.
-- cd directory into the `dbt-core` you'd like to be testing against and run `make dev`.
+1. Install `dbt-risingwave`
 
- #### Connect to Github
-- run `git init`.
-- Connect your lcoal code to a Github repo.
+```shell
+python3 -m pip install 'dbt-risingwave @ git+https://github.com/risingwavelabs/dbt-risingwave'
+```
 
-## Join the dbt Community
+2. Get `RisingWave` running
 
-- Be part of the conversation in the [dbt Community Slack](http://community.getdbt.com/)
-- If one doesn't exist feel free to request a #db-RisingWave channel be made in the [#channel-requests](https://getdbt.slack.com/archives/C01D8J8AJDA) on dbt community slack channel.
-- Read more on the [dbt Community Discourse](https://discourse.getdbt.com)
+Please follow [this](https://www.risingwave.dev/docs/current/get-started/) guide to setup a functional RisingWave instance.
 
-## Reporting bugs and contributing code
+3. Configure `dbt` profile file
 
-- Want to report a bug or request a feature? Let us know on [Slack](http://community.getdbt.com/), or open [an issue](https://github.com/dbt-labs/dbt-redshift/issues/new)
-- Want to help us build dbt? Check out the [Contributing Guide](https://github.com/dbt-labs/dbt/blob/HEAD/CONTRIBUTING.md)
+The profile file is located in `~/.dbt/profiles.yml`. Here's an example of how to use it with RisingWave.
 
-## Code of Conduct
+```yaml
+jaffle_shop:
+  outputs:
+    dev:
+      type: risingwave
+      host: 127.0.0.1
+      user: root
+      pass: ""
+      dbname: dev
+      port: 4566
+      schema: public
+  target: dev
 
-Everyone interacting in the dbt project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [dbt Code of Conduct](https://community.getdbt.com/code-of-conduct).
+```
+
+4. Run `dbt debug` to check whether configuration is correct.
+
+
+## Current Status
+
+All items below have been tested against the the latest RisingWave daily build verison.
+
+- [x] `dbt seed/run/docs` works.
+- [x] Offical example [jaffle_shop](https://github.com/dbt-labs/jaffle_shop) is tested.
+- [ ] Temporary table is disabled due to the lack of support for renaming table. ([#7745](https://github.com/risingwavelabs/risingwave/pull/7745#issuecomment-1422261216))
