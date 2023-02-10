@@ -10,7 +10,9 @@ jobs:
     services:
       risingwave:
         image: ghcr.io/risingwavelabs/risingwave:nightly-20230209 # RW version should be manually updated until a released version is compatiable with this adapter.
-        
+        ports: 
+          - 4566:4566
+          
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.10
@@ -26,7 +28,7 @@ jobs:
           outputs:
             dev:
               type: risingwave
-              host: risingwave
+              host: 127.0.0.1
               user: root
               pass: ""
               dbname: dev
