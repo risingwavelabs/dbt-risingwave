@@ -36,9 +36,15 @@ jobs:
         EOF
     - name: Install dbt-risingwave globally
       run: python3 -m pip install .
+      
     - name: dbt-seed
       run: dbt seed
+      working-directory: jaffle_shop
+      
     - name: dbt-run
       run: dbt run
+      working-directory: jaffle_shop
+      
     - name: dbt-doc
       run: dbt docs generate
+      working-directory: jaffle_shop
