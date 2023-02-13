@@ -7,7 +7,6 @@ from dbt.helper_types import Port
 from dbt.adapters.sql import SQLConnectionManager as connection_cls
 from typing import Optional
 from dbt.logger import GLOBAL_LOGGER as logger
-
 @dataclass
 class RisingWaveCredentials(PostgresCredentials):
     """
@@ -48,7 +47,9 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         # todo: extending PostgresConnectionManager does not allow
         # us to pass custom params to psycopg2.connect
         connection = super().open(connection)
-
+        connection.handle.cursor().execute("SET RW_IMPLICIT_FLUSH TO true")
+        return connection
+    
     # Disable transactions.
     def add_begin_query(self, *args, **kwargs):
         pass
