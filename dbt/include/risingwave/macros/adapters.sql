@@ -27,6 +27,28 @@
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
 
+{% macro risingwave__get_columns_in_relation(relation) -%}
+  {% call statement('get_columns_in_relation', fetch_result=True) %}
+      select
+          column_name,
+          data_type,
+          0 as character_maximum_length, -- todo
+          0 as numeric_precision,
+          0 as numeric_scale
+
+      from {{ relation.information_schema('columns') }}
+      where table_name = '{{ relation.identifier }}'
+        {% if relation.schema %}
+        and table_schema = '{{ relation.schema }}'
+        {% endif %}
+      order by ordinal_position
+
+  {% endcall %}
+  {% set table = load_result('get_columns_in_relation').table %}
+  {{ return(sql_convert_columns_in_relation(table)) }}
+{% endmacro %}
+
+
 -- temporary disable temp table for lacking support to rename table
 {% macro risingwave__make_temp_relation(base_relation, suffix) %}
     {%- set temp_identifier = base_relation.identifier -%}
