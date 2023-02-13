@@ -9,7 +9,7 @@ adapter plugin for [dbt](https://www.getdbt.com/).
 
 **NOTICE**
 
-The adapter (dbt-risingwave) is in very early stage and it just works. However, it does not currently guarantee backward compatibility currently.
+The adapter (dbt-risingwave) is in very early stage and it just works. However, it does not guarantee backward compatibility currently.
 
 ## Getting started
 
