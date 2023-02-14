@@ -54,3 +54,4 @@ All items below have been tested against the the latest RisingWave daily build v
 - [x] `dbt seed/run/docs` works.
 - [x] Offical example [jaffle_shop](https://github.com/dbt-labs/jaffle_shop) is tested.
 - [ ] Temporary table is disabled due to the lack of support for renaming table. ([#7745](https://github.com/risingwavelabs/risingwave/pull/7745#issuecomment-1422261216))
+- [ ] Macro `get_rows_different_sql`  has been partially implemented due to the lack of EXCEPT operator.
