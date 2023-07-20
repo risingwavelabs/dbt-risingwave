@@ -17,8 +17,7 @@
         'table'
       END AS type
     FROM
-      pg_class cls
-      JOIN pg_namespace nsp
+      pg_class cls, pg_namespace nsp
     WHERE
       nsp.oid = cls.relnamespace
       AND nsp.nspname NOT in('rw_catalog', 'information_schema', 'pg_catalog')
