@@ -4,7 +4,7 @@ prompts:
   host:
     hint: "your host name"
   port:
-    default: 5432
+    default: 4566
     type: "int"
   user:
     hint: "dev username"
@@ -13,6 +13,8 @@ prompts:
     hide_input: true
   dbname:
     hint: "default database"
+  schema:
+    hint: "default schema"
   threads:
     hint: "1 or more"
     type: "int"

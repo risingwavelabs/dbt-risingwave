@@ -60,3 +60,34 @@
 {% macro risingwave__make_intermediate_relation(base_relation, suffix) %}
     {{ return(make_temp_relation(base_relation, suffix)) }}
 {% endmacro %}
+
+{% macro risingwave__drop_relation(relation) -%}
+  {% call statement('drop_relation') -%}
+    {% if relation.type == 'view' %}
+      drop view if exists {{ relation }}
+    {% elif relation.type == 'table' %}
+      drop table if exists {{ relation }}
+    {% elif relation.type == 'materializedview' %}
+      drop materialized view if exists {{ relation }}
+    {% elif relation.type == 'sink' %}
+      drop sink if exists {{ relation }}
+    {% elif relation.type == 'source' %}
+      drop source if exists {{ relation }}
+    {% elif relation.type == 'index' %}
+      drop index if exists {{ relation }}
+    {% endif %}
+  {%- endcall %}
+{% endmacro %}
+
+{% macro risingwave__create_view_as(relation, sql) -%}
+  create view {{ relation }} as ( {{ sql }} );
+{%- endmacro %}
+
+{% macro risingwave__create_table_as(relation, sql) -%}
+  create table {{ relation }} as ( {{ sql }} );
+{%- endmacro %}
+
+{% macro risingwave__create_materialized_view_as(relation, sql) -%}
+  create materialized view {{ relation }} as ( {{ sql }} );
+{%- endmacro %}
+
