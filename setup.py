@@ -16,8 +16,5 @@ setup(
     url="If you have already made a github repo to tie the project to place it here, otherwise update in setup.py later.",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
-    install_requires=[
-        "dbt-postgres~=1.5.0",
-        "dbt-core~=1.5.0"
-    ],
+    install_requires=["dbt-postgres~=1.5.0"],
 )
