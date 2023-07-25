@@ -68,7 +68,7 @@
     {% elif relation.type == 'table' %}
       drop table if exists {{ relation }}
     {% elif relation.type == 'materializedview' %}
-      drop materialized view if exists {{ relation }}
+      drop materialized view if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }}
     {% elif relation.type == 'source' %}
