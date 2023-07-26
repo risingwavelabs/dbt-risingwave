@@ -64,17 +64,17 @@
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
-      drop view if exists {{ relation }}
+      drop view if exists {{ relation }} cascade
     {% elif relation.type == 'table' %}
-      drop table if exists {{ relation }}
+      drop table if exists {{ relation }} cascade
     {% elif relation.type == 'materializedview' %}
       drop materialized view if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
-      drop sink if exists {{ relation }}
+      drop sink if exists {{ relation }} cascade
     {% elif relation.type == 'source' %}
-      drop source if exists {{ relation }}
+      drop source if exists {{ relation }} cascade
     {% elif relation.type == 'index' %}
-      drop index if exists {{ relation }}
+      drop index if exists {{ relation }} cascade
     {% endif %}
   {%- endcall %}
 {% endmacro %}
