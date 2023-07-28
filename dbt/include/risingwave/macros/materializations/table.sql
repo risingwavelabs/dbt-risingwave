@@ -1,29 +1,10 @@
 {% materialization table, adapter='risingwave' %}
-  {%- set identifier = model['alias'] -%}
-  {%- set old_relation = adapter.get_relation(identifier=identifier,
-                                              schema=schema,
-                                              database=database) -%}
-  {%- set target_relation = api.Relation.create(identifier=identifier,
-                                                schema=schema,
-                                                database=database,
-                                                type='table') -%}
+  {{ exceptions.raise_compiler_error(
+      """
+        dbt-risingwave does not support table models, but we provide a `materializedview` model 
+        which could keep your data up-to-date automatically and incrementally.
 
-  {% if old_relation %}
-    {{ adapter.drop_relation(old_relation) }}
-  {% endif %}
-
-  {{ run_hooks(pre_hooks, inside_transaction=False) }}
-  {{ run_hooks(pre_hooks, inside_transaction=True) }}
-
-  {% call statement('main') -%}
-    {{ risingwave__create_table_as(target_relation, sql) }}
-  {%- endcall %}
-
-  {{ create_indexes(target_relation) }}
-  {% do persist_docs(target_relation, model) %}
-
-  {{ run_hooks(post_hooks, inside_transaction=False) }}
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
-  {{ return({'relations': [target_relation]}) }}
+        Use the `materializedview` instead.
+      """
+  )}}
 {% endmaterialization %}
