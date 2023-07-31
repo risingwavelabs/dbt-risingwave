@@ -30,7 +30,7 @@ Please follow [this](https://www.risingwave.dev/docs/current/get-started/) guide
 The profile file is located in `~/.dbt/profiles.yml`. Here's an example of how to use it with RisingWave.
 
 ```yaml
-jaffle_shop:
+default:
   outputs:
     dev:
       type: risingwave
@@ -41,7 +41,6 @@ jaffle_shop:
       port: 4566
       schema: public
   target: dev
-
 ```
 
 4. Run `dbt debug` to check whether configuration is correct.
@@ -51,7 +50,6 @@ jaffle_shop:
 
 All items below have been tested against the the latest RisingWave daily build verison.
 
-- [x] `dbt seed/run/docs` works.
+- [x] `dbt seed/run/test/docs` works.
 - [x] Offical example [jaffle_shop](https://github.com/dbt-labs/jaffle_shop) is tested.
-- [ ] Temporary table is disabled due to the lack of support for renaming table. ([#7745](https://github.com/risingwavelabs/risingwave/pull/7745#issuecomment-1422261216))
-- [ ] Macro `get_rows_different_sql`  has been partially implemented due to the lack of EXCEPT operator.
+- [x] RisingWave offical example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark) is tested.
