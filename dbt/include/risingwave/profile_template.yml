@@ -2,19 +2,24 @@ fixed:
   type: risingwave
 prompts:
   host:
+    default: "localhost"
     hint: "your host name"
   port:
     default: 4566
     type: "int"
   user:
     hint: "dev username"
+    default: "root"
   password:
     hint: "dev password"
     hide_input: true
+    default: ""
   dbname:
     hint: "default database"
+    default: "dev"
   schema:
     hint: "default schema"
+    default: "public"
   threads:
     hint: "1 or more"
     type: "int"
