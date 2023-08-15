@@ -18,7 +18,7 @@ The package has not been published to PyPI, please install it via git.
 1. Install `dbt-risingwave`
 
 ```shell
-python3 -m pip install 'dbt-risingwave @ git+https://github.com/risingwavelabs/dbt-risingwave'
+python3 -m pip install dbt-risingwave
 ```
 
 2. Get `RisingWave` running
