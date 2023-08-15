@@ -31,7 +31,7 @@
       select
           column_name,
           data_type,
-          0 as character_maximum_length, -- todo
+          null as character_maximum_length, -- todo
           0 as numeric_precision,
           0 as numeric_scale
 
