@@ -31,9 +31,9 @@
       select
           column_name,
           data_type,
-          null as character_maximum_length, -- todo
-          0 as numeric_precision,
-          0 as numeric_scale
+          null as character_maximum_length,
+          null as numeric_precision,
+          null as numeric_scale
 
       from {{ relation.information_schema('columns') }}
       where table_name = '{{ relation.identifier }}'
