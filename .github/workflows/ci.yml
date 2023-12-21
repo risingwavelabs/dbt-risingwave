@@ -39,16 +39,16 @@ jobs:
 
       - name: dbt-seed
         run: dbt seed
-        working-directory: jaffle_shop
+        working-directory: examples/jaffle_shop
 
       - name: dbt-run
         run: dbt run
-        working-directory: jaffle_shop
+        working-directory: examples/jaffle_shop
 
       - name: dbt-test
         run: dbt test
-        working-directory: jaffle_shop
+        working-directory: examples/jaffle_shop
 
       - name: dbt-doc
         run: dbt docs generate
-        working-directory: jaffle_shop
+        working-directory: examples/jaffle_shop
