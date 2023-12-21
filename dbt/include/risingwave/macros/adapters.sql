@@ -69,13 +69,15 @@
       drop table if exists {{ relation }} cascade
     {% elif relation.type == 'materializedview' %}
       drop materialized view if exists {{ relation }} cascade
-    {% elif relation.type == 'sink' %}
-      drop sink if exists {{ relation }} cascade
-    {% elif relation.type == 'source' %}
-      drop source if exists {{ relation }} cascade
     {% elif relation.type == 'index' %}
       drop index if exists {{ relation }} cascade
     {% endif %}
+  {%- endcall %}
+{% endmacro %}
+
+{% macro risingwave__drop_source_cascade(relation) -%}
+  {% call statement('drop_relation') -%}
+    drop source if exists {{ relation }} cascade
   {%- endcall %}
 {% endmacro %}
 
@@ -97,6 +99,6 @@
   );
 {%- endmacro %}
 
-{% macro risingwave__create_source_as(relation, sql) -%}
+{% macro risingwave__create_source_as(sql) -%}
   {{ sql }};
 {%- endmacro %}

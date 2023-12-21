@@ -9,14 +9,14 @@
                                                 type='table') -%}
 
   {% if old_relation %}
-    {{ adapter.drop_relation(old_relation) }}
+    {{ risingwave__drop_source_cascade(old_relation) }}
   {% endif %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   {% call statement('main') -%}
-    {{ risingwave__create_source_as(target_relation, sql) }}
+    {{ risingwave__create_source_as(sql) }}
   {%- endcall %}
 
   {% do persist_docs(target_relation, model) %}
