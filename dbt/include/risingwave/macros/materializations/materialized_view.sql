@@ -1,6 +1,7 @@
 {% materialization materialized_view, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
+  {{ adapter.create_schema(api.Relation.create(database=database, schema="__risingwave_dbt_tmp")) }}
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
                                               database=database) -%}
@@ -9,22 +10,18 @@
                                                 database=database,
                                                 type='materialized_view') -%}
 
-<<<<<<< HEAD
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}
-=======
   {%- set tmp_relation = api.Relation.create(identifier=identifier,
-                                                schema="tmp",
+                                                schema="__risingwave_dbt_tmp",
                                                 database=database,
                                                 type='materializedview') -%}
 
->>>>>>> d8b8942 (zero downtime MV)
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-<<<<<<< HEAD
   {% if old_relation is none or (full_refresh_mode and old_relation) %}
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
@@ -56,7 +53,6 @@
     {% endif %}
   {% endif %}
 
-=======
   {{ adapter.drop_relation(tmp_relation) }}
 
   {% call statement('main') -%}
@@ -73,7 +69,6 @@
   {% do run_query(query) %}
 
   {{ create_indexes(target_relation) }}
->>>>>>> d8b8942 (zero downtime MV)
   {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
