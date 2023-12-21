@@ -97,3 +97,6 @@
   );
 {%- endmacro %}
 
+{% macro risingwave__create_source_as(relation, sql) -%}
+  {{ sql }};
+{%- endmacro %}
