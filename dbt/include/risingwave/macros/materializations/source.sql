@@ -1,4 +1,4 @@
-{% materialization table, adapter='risingwave' %}
+{% materialization source, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
