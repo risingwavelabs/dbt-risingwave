@@ -83,7 +83,7 @@
 
 {% macro risingwave__drop_table_with_connector_cascade(relation) -%}
   {% call statement('drop_relation') -%}
-    drop source if exists {{ relation }} cascade
+    drop table if exists {{ relation }} cascade
   {%- endcall %}
 {% endmacro %}
 
