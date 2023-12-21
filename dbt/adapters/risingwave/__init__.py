@@ -1,3 +1,4 @@
+from dbt.adapters.risingwave.connections import RisingWaveConnectionManager # noqa
 from dbt.adapters.risingwave.connections import RisingWaveCredentials
 from dbt.adapters.risingwave.impl import RisingWaveAdapter
 
