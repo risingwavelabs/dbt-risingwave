@@ -1,12 +1,8 @@
-from contextlib import contextmanager
 from dataclasses import dataclass
-import dbt.exceptions # noqa
-from dbt.adapters.base import Credentials
 from dbt.adapters.postgres import PostgresConnectionManager, PostgresCredentials
-from dbt.helper_types import Port
-from dbt.adapters.sql import SQLConnectionManager as connection_cls
 from typing import Optional
-from dbt.logger import GLOBAL_LOGGER as logger
+
+
 @dataclass
 class RisingWaveCredentials(PostgresCredentials):
     """
@@ -26,7 +22,7 @@ class RisingWaveCredentials(PostgresCredentials):
         return self.host
 
     def _connection_keys(self):
-      return (
+        return (
             "host",
             "port",
             "user",
@@ -39,6 +35,7 @@ class RisingWaveCredentials(PostgresCredentials):
             "retries",
         )
 
+
 class RisingWaveConnectionManager(PostgresConnectionManager):
     TYPE = "risingwave"
 
@@ -49,7 +46,7 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         connection = super().open(connection)
         connection.handle.cursor().execute("SET RW_IMPLICIT_FLUSH TO true")
         return connection
-    
+
     # Disable transactions.
     def add_begin_query(self, *args, **kwargs):
         pass
