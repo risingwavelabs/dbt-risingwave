@@ -81,6 +81,18 @@
   {%- endcall %}
 {% endmacro %}
 
+{% macro risingwave__drop_table_with_connector_cascade(relation) -%}
+  {% call statement('drop_relation') -%}
+    drop source if exists {{ relation }} cascade
+  {%- endcall %}
+{% endmacro %}
+
+{% macro risingwave__drop_sink_cascade(relation) -%}
+  {% call statement('drop_relation') -%}
+    drop sink if exists {{ relation }} cascade
+  {%- endcall %}
+{% endmacro %}
+
 {% macro risingwave__create_view_as(relation, sql) -%}
   create view {{ relation }} as ( 
     {{ sql }} 
@@ -100,5 +112,14 @@
 {%- endmacro %}
 
 {% macro risingwave__create_source_as(sql) -%}
+  {{ sql }};
+{%- endmacro %}
+
+{% macro risingwave__create_table_with_connector_as(sql) -%}
+  {{ sql }};
+{%- endmacro %}
+
+
+{% macro risingwave__create_sink_as(sql) -%}
   {{ sql }};
 {%- endmacro %}
