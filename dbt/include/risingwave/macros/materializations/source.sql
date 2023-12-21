@@ -6,7 +6,7 @@
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
-                                                type='source') -%}
+                                                type='table') -%}
 
   {% if old_relation %}
     {{ adapter.drop_relation(old_relation) }}
