@@ -3,50 +3,44 @@ name: Test dbt-risingwave
 on: [push]
 
 jobs:
-  test-with-jaffle_shop:
+  test_examples:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 5
     services:
       risingwave:
-        image: ghcr.io/risingwavelabs/risingwave:nightly-20230209 # RW version should be manually updated until a released version is compatiable with this adapter.
-        ports: 
+        image: ghcr.io/risingwavelabs/risingwave:v1.5.1
+        ports:
           - 4566:4566
-          
+
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
-    - name: Clone jaffle_shop
-      run: git clone --depth 1 https://github.com/dbt-labs/jaffle_shop.git
-    - name: Setup dbt profile
-      run: |
-        mkdir -p $HOME/.dbt && cat >> $HOME/.dbt/profiles.yml <<EOF
-        jaffle_shop:
-          outputs:
-            dev:
-              type: risingwave
-              host: 127.0.0.1
-              user: root
-              pass: ""
-              dbname: dev
-              port: 4566
-              schema: public
-          target: dev
-        EOF
-    - name: Install dbt-risingwave globally
-      run: python3 -m pip install .
-      
-    - name: dbt-seed
-      run: dbt seed
-      working-directory: jaffle_shop
-      
-    - name: dbt-run
-      run: dbt run
-      working-directory: jaffle_shop
-      
-    - name: dbt-doc
-      run: dbt docs generate
-      working-directory: jaffle_shop
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.10"
+      - name: Setup dbt profile
+        run: |
+          mkdir -p $HOME/.dbt && cat >> $HOME/.dbt/profiles.yml <<EOF
+          jaffle_shop:
+            outputs:
+              dev:
+                type: risingwave
+                host: 127.0.0.1
+                user: root
+                pass: ""
+                dbname: dev
+                port: 4566
+                schema: public
+            target: dev
+          EOF
+      - name: Install dbt-risingwave globally
+        run: python3 -m pip install .
+
+      - name: Test jaffle_shop
+        run:
+          dbt seed
+          dbt run
+          dbt test
+          dbt docs generate
+        working-directory: examples/jaffle_shop
