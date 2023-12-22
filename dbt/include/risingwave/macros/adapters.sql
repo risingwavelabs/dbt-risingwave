@@ -57,7 +57,7 @@
 {% macro risingwave__get_create_index_sql(relation, index_dict) -%}
   {%- set index_config = adapter.parse_index(index_dict) -%}
   {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
-  {%- set index_name = "__dbt_index_" + relation + "_" + "_".join(index_config.columns) -%}
+  {%- set index_name = "__dbt_index_" + relation.identifier + "_" + "_".join(index_config.columns) -%}
 
   create index if not exists
   "{{ index_name }}"
