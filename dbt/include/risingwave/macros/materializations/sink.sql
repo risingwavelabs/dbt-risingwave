@@ -7,10 +7,10 @@
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
-                                                type='table') -%}
+                                                type='sink') -%}
 
   {% if full_refresh_mode and old_relation %}
-    {{ risingwave__drop_sink_cascade(old_relation) }}
+    {{ adapter.drop_relation(old_relation) }}
   {% endif %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
