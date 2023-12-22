@@ -66,8 +66,6 @@
       drop source if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }} cascade
-    {% elif relation.type == 'table_with_connector' %}
-      drop table if exists {{ relation }} cascade
     {% elif relation.type == 'index' %}
       drop index if exists {{ relation }} cascade
     {% endif %}

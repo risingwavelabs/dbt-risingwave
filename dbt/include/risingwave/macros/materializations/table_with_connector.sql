@@ -7,7 +7,7 @@
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
-                                                type='table_with_connector') -%}
+                                                type='table') -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}

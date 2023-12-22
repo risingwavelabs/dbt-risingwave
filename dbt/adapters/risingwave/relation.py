@@ -15,7 +15,6 @@ class RisingWaveRelationType(StrEnum):
 
     Source = "source"
     Sink = "sink"
-    TableWithConnector = "table_with_connector"
 
 
 @dataclass(frozen=True, eq=False, repr=False)
