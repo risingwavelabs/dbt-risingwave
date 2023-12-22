@@ -3,25 +3,18 @@
 -- Here we only query table, view, materialized view and source. (without index and SINK)
 {% macro risingwave__list_relations_without_caching(schema_relation) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    SELECT
-      '{{ schema_relation.database }}' as database,
-      cls.relname AS name,
-      nsp.nspname AS schema,
-      CASE WHEN relkind = 'x' THEN
-        'source'
-      WHEN relkind = 'm' THEN
-        'materializedview'
-      WHEN relkind = 'v' THEN
-        'view'
-      WHEN relkind = 'r' THEN
-        'table'
-      END AS type
-    FROM
-      pg_class cls, pg_namespace nsp
-    WHERE
-      nsp.oid = cls.relnamespace
-      AND nsp.nspname NOT in('rw_catalog', 'information_schema', 'pg_catalog')
-      AND lower(nsp.nspname) = lower('{{ schema_relation.schema }}'); -- workaround lacking of `ILIKE`
+    select 
+    '{{ schema_relation.database }}' as database,
+    rw_relations.name as name,
+    rw_schemas.name as schema,
+    CASE WHEN relation_type = 'materialized view' THEN
+      'materializedview'
+      else relation_type
+    END AS type
+    from rw_relations join rw_schemas on schema_id=rw_schemas.id
+    where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
+    and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
+    AND rw_schemas.name = '{{ schema_relation.schema }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
