@@ -80,19 +80,19 @@
 {% endmacro %}
 
 {% macro risingwave__create_view_as(relation, sql) -%}
-  create view {{ relation }} as ( 
+  create view if not exists {{ relation }} as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
-  create table {{ relation }} as ( 
+  create table if not exists {{ relation }} as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
-  create materialized view {{ relation }} as ( 
+  create materialized view if not exists {{ relation }} as ( 
     {{ sql }} 
   );
 {%- endmacro %}
