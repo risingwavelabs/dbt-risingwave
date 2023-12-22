@@ -9,7 +9,7 @@ jobs:
       max-parallel: 5
     services:
       risingwave:
-        image: ghcr.io/risingwavelabs/risingwave:nightly-20230209 # RW version should be manually updated until a released version is compatiable with this adapter.
+        image: ghcr.io/risingwavelabs/risingwave:v1.5.2 # RW version should be manually updated until a released version is compatiable with this adapter.
         ports: 
           - 4566:4566
           
