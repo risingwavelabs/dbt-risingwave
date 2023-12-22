@@ -1,5 +1,6 @@
 {% materialization sink, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
+  {%- set full_refresh_mode = should_full_refresh() -%}
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
                                               database=database) -%}
@@ -8,7 +9,7 @@
                                                 database=database,
                                                 type='table') -%}
 
-  {% if old_relation %}
+  {% if full_refresh_mode and old_relation %}
     {{ risingwave__drop_sink_cascade(old_relation) }}
   {% endif %}
 
@@ -16,7 +17,7 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   {% call statement('main') -%}
-    {{ risingwave__create_sink_as(sql) }}
+    {{ risingwave__run_sql(sql) }}
   {%- endcall %}
 
   {% do persist_docs(target_relation, model) %}

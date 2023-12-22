@@ -111,15 +111,6 @@
   );
 {%- endmacro %}
 
-{% macro risingwave__create_source_as(sql) -%}
-  {{ sql }};
-{%- endmacro %}
-
-{% macro risingwave__create_table_with_connector_as(sql) -%}
-  {{ sql }};
-{%- endmacro %}
-
-
-{% macro risingwave__create_sink_as(sql) -%}
+{% macro risingwave__run_sql(sql) -%}
   {{ sql }};
 {%- endmacro %}
