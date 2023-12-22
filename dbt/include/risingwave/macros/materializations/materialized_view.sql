@@ -1,6 +1,6 @@
 {% materialization materializedview, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
-  {%- set full_refresh_mode = (should_full_refresh() -%}
+  {%- set full_refresh_mode = should_full_refresh() -%}
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
                                               database=database) -%}
