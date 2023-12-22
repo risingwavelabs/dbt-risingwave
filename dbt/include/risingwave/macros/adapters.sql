@@ -54,6 +54,17 @@
     {{ return(make_temp_relation(base_relation, suffix)) }}
 {% endmacro %}
 
+{% macro risingwave__get_create_index_sql(relation, index_dict) -%}
+  {%- set index_config = adapter.parse_index(index_dict) -%}
+  {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
+  {%- set index_name = "__dbt_index_" + relation + "_" + "_".join(index_config.columns) -%}
+
+  create index if not exists
+  "{{ index_name }}"
+  on {{ relation }} 
+  ({{ comma_separated_columns }});
+{%- endmacro %}
+
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
