@@ -117,5 +117,9 @@
 {%- endmacro %}
 
 {% macro risingwave__run_sql(sql) -%}
+  {% set contract_config = config.get('contract') %}
+  {% if contract_config.enforced %}
+    {{exceptions.warn("Model contracts cannot be enforced for source, table_with_connector and sink")}}
+  {%- endif %}
   {{ sql }};
 {%- endmacro %}
