@@ -84,19 +84,34 @@
 {% endmacro %}
 
 {% macro risingwave__create_view_as(relation, sql) -%}
-  create view if not exists {{ relation }} as ( 
+  create view if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
-  create table if not exists {{ relation }} as ( 
+  create table if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
-  create materialized view if not exists {{ relation }} as ( 
+  create materialized view if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
