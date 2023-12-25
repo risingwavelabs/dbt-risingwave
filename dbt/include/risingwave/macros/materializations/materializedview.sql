@@ -20,9 +20,6 @@
     {{ risingwave__create_materialized_view_as(target_relation, sql) }}
   {%- endcall %}
 
-  {% if old_relation is none or full_refresh_mode %}
-    {% do create_indexes(target_relation) %}
-  {% endif %}
   {{ create_indexes(target_relation) }}
   {% do persist_docs(target_relation, model) %}
 
