@@ -1,4 +1,4 @@
-{% materialization materialized_view, adapter='risingwave' %}
+{% materialization materializedview, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
   {%- set old_relation = adapter.get_relation(identifier=identifier,
@@ -7,7 +7,7 @@
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
-                                                type='materialized_view') -%}
+                                                type='materializedview') -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
