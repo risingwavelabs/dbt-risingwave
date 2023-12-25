@@ -8,7 +8,7 @@
     rw_relations.name as name,
     rw_schemas.name as schema,
     CASE WHEN relation_type = 'materialized view' THEN
-      'materializedview'
+      'materialized_view'
       else relation_type
     END AS type
     from rw_relations join rw_schemas on schema_id=rw_schemas.id
@@ -72,6 +72,8 @@
     {% elif relation.type == 'table' %}
       drop table if exists {{ relation }} cascade
     {% elif relation.type == 'materializedview' %}
+      drop materialized view if exists {{ relation }} cascade
+    {% elif relation.type == 'materialized_view' %}
       drop materialized view if exists {{ relation }} cascade
     {% elif relation.type == 'source' %}
       drop source if exists {{ relation }} cascade
