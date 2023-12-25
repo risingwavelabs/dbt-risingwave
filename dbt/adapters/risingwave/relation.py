@@ -10,7 +10,8 @@ class RisingWaveRelationType(StrEnum):
     Table = "table"
     View = "view"
     CTE = "cte"
-    MaterializedView = "materializedview"
+    MaterializedView = "materialized_view"
+    MaterializedView_v1_5_0 = "materializedview"
     External = "external"
 
     Source = "source"
