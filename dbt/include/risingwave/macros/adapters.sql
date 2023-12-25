@@ -3,25 +3,18 @@
 -- Here we only query table, view, materialized view and source. (without index and SINK)
 {% macro risingwave__list_relations_without_caching(schema_relation) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    SELECT
-      '{{ schema_relation.database }}' as database,
-      cls.relname AS name,
-      nsp.nspname AS schema,
-      CASE WHEN relkind = 'x' THEN
-        'source'
-      WHEN relkind = 'm' THEN
-        'materializedview'
-      WHEN relkind = 'v' THEN
-        'view'
-      WHEN relkind = 'r' THEN
-        'table'
-      END AS type
-    FROM
-      pg_class cls, pg_namespace nsp
-    WHERE
-      nsp.oid = cls.relnamespace
-      AND nsp.nspname NOT in('rw_catalog', 'information_schema', 'pg_catalog')
-      AND lower(nsp.nspname) = lower('{{ schema_relation.schema }}'); -- workaround lacking of `ILIKE`
+    select 
+    '{{ schema_relation.database }}' as database,
+    rw_relations.name as name,
+    rw_schemas.name as schema,
+    CASE WHEN relation_type = 'materialized view' THEN
+      'materializedview'
+      else relation_type
+    END AS type
+    from rw_relations join rw_schemas on schema_id=rw_schemas.id
+    where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
+    and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
+    AND rw_schemas.name = '{{ schema_relation.schema }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
@@ -61,6 +54,17 @@
     {{ return(make_temp_relation(base_relation, suffix)) }}
 {% endmacro %}
 
+{% macro risingwave__get_create_index_sql(relation, index_dict) -%}
+  {%- set index_config = adapter.parse_index(index_dict) -%}
+  {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
+  {%- set index_name = "__dbt_index_" + relation.identifier + "_" + "_".join(index_config.columns) -%}
+
+  create index if not exists
+  "{{ index_name }}"
+  on {{ relation }} 
+  ({{ comma_separated_columns }});
+{%- endmacro %}
+
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
@@ -69,10 +73,10 @@
       drop table if exists {{ relation }} cascade
     {% elif relation.type == 'materializedview' %}
       drop materialized view if exists {{ relation }} cascade
-    {% elif relation.type == 'sink' %}
-      drop sink if exists {{ relation }} cascade
     {% elif relation.type == 'source' %}
       drop source if exists {{ relation }} cascade
+    {% elif relation.type == 'sink' %}
+      drop sink if exists {{ relation }} cascade
     {% elif relation.type == 'index' %}
       drop index if exists {{ relation }} cascade
     {% endif %}
@@ -80,20 +84,42 @@
 {% endmacro %}
 
 {% macro risingwave__create_view_as(relation, sql) -%}
-  create view if not exists {{ relation }} as ( 
+  create view if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
-  create table if not exists {{ relation }} as ( 
+  create table if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
-  create materialized view if not exists {{ relation }} as ( 
+  create materialized view if not exists {{ relation }} 
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as ( 
     {{ sql }} 
   );
 {%- endmacro %}
 
+{% macro risingwave__run_sql(sql) -%}
+  {% set contract_config = config.get('contract') %}
+  {% if contract_config.enforced %}
+    {{exceptions.warn("Model contracts cannot be enforced for source, table_with_connector and sink")}}
+  {%- endif %}
+  {{ sql }};
+{%- endmacro %}

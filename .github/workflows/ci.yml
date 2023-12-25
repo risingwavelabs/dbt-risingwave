@@ -9,10 +9,10 @@ jobs:
       max-parallel: 5
     services:
       risingwave:
-        image: ghcr.io/risingwavelabs/risingwave:v1.5.2 # RW version should be manually updated until a released version is compatiable with this adapter.
-        ports: 
+        image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        ports:
           - 4566:4566
-          
+
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.10
@@ -46,7 +46,50 @@ jobs:
     - name: dbt-run
       run: dbt run
       working-directory: jaffle_shop
-      
+
     - name: dbt-doc
       run: dbt docs generate
       working-directory: jaffle_shop
+  test-dbt_rw_nexmark:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+    services:
+      risingwave:
+        image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        ports:
+          - 4566:4566
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Clone dbt_rw_nexmark
+      run: git clone --depth 1 https://github.com/risingwavelabs/dbt_rw_nexmark.git
+    - name: Setup dbt profile
+      run: |
+        mkdir -p $HOME/.dbt && cat >> $HOME/.dbt/profiles.yml <<EOF
+        dbt_rw_nexmark:
+          outputs:
+            dev:
+              type: risingwave
+              host: 127.0.0.1
+              user: root
+              pass: ""
+              dbname: dev
+              port: 4566
+              schema: public
+          target: dev
+        EOF
+    - name: Install dbt-risingwave globally
+      run: python3 -m pip install .
+
+    - name: dbt-run
+      run: dbt run
+      working-directory: dbt_rw_nexmark
+
+    - name: dbt-doc
+      run: dbt docs generate
+      working-directory: dbt_rw_nexmark
