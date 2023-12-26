@@ -26,3 +26,8 @@ class RisingWaveRelation(PostgresRelation):
     @classproperty
     def get_relation_type(cls) -> Type[RisingWaveRelationType]:
         return RisingWaveRelationType
+
+    # RisingWave has no limitation on relation name length.
+    # We set a relatively large value right now.
+    def relation_max_name_length(self):
+        return 1024

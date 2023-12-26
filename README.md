@@ -59,6 +59,20 @@ The dbt models for managing data transformations in RisingWave is similar to typ
 
 To learn how to use, you can check RisingWave offical example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark).
 
+## DBT RUN behavior
+
+- `dbt run`: only create new models (if not exists) without dropping any models.
+- `dbt run --full-refresh`: drop models and create the new ones. This command can make sure your streaming pipelines are consistent with what you define in dbt models.
+
+## Graph operators
+
+[Graph operators](https://docs.getdbt.com/reference/node-selection/graph-operators) is useful when you want to only recreate a subset of your models.
+
+```sh
+dbt run --select "my_model+"         # select my_model and all children
+dbt run --select "+my_model"         # select my_model and all parents
+dbt run --select "+my_model+"         # select my_model, and all of its parents and children
+```
 
 ## Tests
 
