@@ -16,11 +16,36 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% call statement('main') -%}
-    {{ risingwave__create_materialized_view_as(target_relation, sql) }}
-  {%- endcall %}
+  {% if full_refresh_mode and old_relation %}
+    {% call statement('main') -%}
+      {{ risingwave__create_materialized_view_as(target_relation, sql) }}
+    {%- endcall %}
 
-  {{ create_indexes(target_relation) }}
+    {{ create_indexes(target_relation) }}
+  {% else %}
+    -- get config options
+    {% set on_configuration_change = config.get('on_configuration_change') %}
+    {% set configuration_changes = get_materialized_view_configuration_changes(old_relation, config) %}
+
+    {% if configuration_changes is none %}
+        -- do nothing
+    {% elif on_configuration_change == 'apply' %}
+      {% call statement('main') -%}
+        {{ postgres__update_indexes_on_materialized_view(relation, configuration_changes.indexes) }}
+      {%- endcall %}
+    {% elif on_configuration_change == 'continue' %}
+        -- do nothing but a warn
+        {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for `" ~ target_relation ~ "`") }}
+    {% elif on_configuration_change == 'fail' %}
+        {{ exceptions.raise_fail_fast_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for `" ~ target_relation ~ "`") }}
+
+    {% else %}
+        -- this only happens if the user provides a value other than `apply`, 'skip', 'fail'
+        {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
+
+    {% endif %}
+  {% endif %}
+
   {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
