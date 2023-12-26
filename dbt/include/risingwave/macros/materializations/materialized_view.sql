@@ -16,7 +16,7 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% if full_refresh_mode and old_relation %}
+  {% if old_relation is none or (full_refresh_mode and old_relation) %}
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
