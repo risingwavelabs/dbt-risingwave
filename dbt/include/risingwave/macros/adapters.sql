@@ -170,7 +170,7 @@
       and n.nspname = '{{ relation.schema }}'
       and t.relkind in ('r', 'm')
     )
-    select name, method, "unique", array_to_string(array_agg(attname order by ord), ',') from index_info
+    select name, method, "unique", array_to_string(array_agg(attname order by ord), ',') as column_names from index_info
     group by 1, 2, 3
     order by 1, 2, 3;
 {% endmacro %}
