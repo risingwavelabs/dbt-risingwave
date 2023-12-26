@@ -65,6 +65,10 @@
   ({{ comma_separated_columns }});
 {%- endmacro %}
 
+{%- macro risingwave__get_drop_index_sql(relation, index_name) -%}
+    drop index if exists "{{ relation.schema }}"."{{ index_name }}"
+{%- endmacro -%}
+
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
@@ -79,8 +83,6 @@
       drop source if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }} cascade
-    {% elif relation.type == 'index' %}
-      drop index if exists {{ relation }} cascade
     {% endif %}
   {%- endcall %}
 {% endmacro %}
@@ -125,3 +127,50 @@
   {%- endif %}
   {{ sql }};
 {%- endmacro %}
+
+{%- macro risingwave__update_indexes_on_materialized_view(relation, index_changes) -%}
+    {{- log("Applying UPDATE INDEXES to: " ~ relation) -}}
+
+    {%- for _index_change in index_changes -%}
+        {%- set _index = _index_change.context -%}
+
+        {%- if _index_change.action == "drop" -%}
+
+            {{ risingwave__get_drop_index_sql(relation, _index.name) }};
+
+        {%- elif _index_change.action == "create" -%}
+
+            {{ risingwave__get_create_index_sql(relation, _index.as_node_config) }}
+
+        {%- endif -%}
+
+    {%- endfor -%}
+
+{%- endmacro -%}
+
+{% macro risingwave__get_show_indexes_sql(relation) %}
+    with index_info as (
+    select
+        i.relname                                   as name,
+        'btree'                                     as method,
+        ix.indisunique                              as "unique",
+        a.attname                                   as attname,
+        array_position(ix.indkey, a.attnum)        as ord
+    from pg_index ix
+    join pg_class i
+        on i.oid = ix.indexrelid
+    join pg_class t
+        on t.oid = ix.indrelid
+    join pg_namespace n
+        on n.oid = t.relnamespace
+    join pg_attribute a
+        on a.attrelid = t.oid
+        and a.attnum = ANY(ix.indkey)
+    where t.relname = '{{ relation.identifier }}'
+      and n.nspname = '{{ relation.schema }}'
+      and t.relkind in ('r', 'm')
+    )
+    select name, method, "unique", array_to_string(array_agg(attname order by ord), ',') as column_names from index_info
+    group by 1, 2, 3
+    order by 1, 2, 3;
+{% endmacro %}
