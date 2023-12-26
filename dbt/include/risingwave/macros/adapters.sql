@@ -149,11 +149,13 @@
 {%- endmacro -%}
 
 {% macro risingwave__get_show_indexes_sql(relation) %}
+    with index_info as (
     select
         i.relname                                   as name,
         'btree'                                     as method,
         ix.indisunique                              as "unique",
-        array_to_string(array_agg(a.attname), ',')  as column_names
+        a.attname                                   as attname,
+        array_position(ix.indkey, a.attnum)        as ord
     from pg_index ix
     join pg_class i
         on i.oid = ix.indexrelid
@@ -167,6 +169,8 @@
     where t.relname = '{{ relation.identifier }}'
       and n.nspname = '{{ relation.schema }}'
       and t.relkind in ('r', 'm')
+    )
+    select name, method, "unique", array_to_string(array_agg(attname order by ord), ',') from index_info
     group by 1, 2, 3
-    order by 1, 2, 3
+    order by 1, 2, 3;
 {% endmacro %}
