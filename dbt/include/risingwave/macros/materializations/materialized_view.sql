@@ -31,7 +31,7 @@
         -- do nothing
     {% elif on_configuration_change == 'apply' %}
       {% call statement('main') -%}
-        {{ postgres__update_indexes_on_materialized_view(relation, configuration_changes.indexes) }}
+        {{ postgres__update_indexes_on_materialized_view(target_relation, configuration_changes.indexes) }}
       {%- endcall %}
     {% elif on_configuration_change == 'continue' %}
         -- do nothing but a warn
