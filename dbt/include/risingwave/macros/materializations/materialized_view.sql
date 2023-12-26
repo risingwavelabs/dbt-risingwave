@@ -36,9 +36,9 @@
     {% elif on_configuration_change == 'continue' %}
         -- do nothing but a warn
         {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for `" ~ target_relation ~ "`") }}
+        {{ materialized_view_execute_no_op(target_relation) }}
     {% elif on_configuration_change == 'fail' %}
         {{ exceptions.raise_fail_fast_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for `" ~ target_relation ~ "`") }}
-
     {% else %}
         -- this only happens if the user provides a value other than `apply`, 'skip', 'fail'
         {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
