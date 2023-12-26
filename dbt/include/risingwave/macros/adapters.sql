@@ -148,3 +148,25 @@
 
 {%- endmacro -%}
 
+{% macro risingwave__get_show_indexes_sql(relation) %}
+    select
+        i.relname                                   as name,
+        'btree'                                     as method,
+        ix.indisunique                              as "unique",
+        array_to_string(array_agg(a.attname), ',')  as column_names
+    from pg_index ix
+    join pg_class i
+        on i.oid = ix.indexrelid
+    join pg_class t
+        on t.oid = ix.indrelid
+    join pg_namespace n
+        on n.oid = t.relnamespace
+    join pg_attribute a
+        on a.attrelid = t.oid
+        and a.attnum = ANY(ix.indkey)
+    where t.relname = '{{ relation.identifier }}'
+      and n.nspname = '{{ relation.schema }}'
+      and t.relkind in ('r', 'm')
+    group by 1, 2, 3
+    order by 1, 2, 3
+{% endmacro %}
