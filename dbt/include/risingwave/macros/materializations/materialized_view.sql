@@ -1,10 +1,13 @@
 {% materialization materialized_view, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
+
   {{ adapter.create_schema(api.Relation.create(database=database, schema="__risingwave_dbt_tmp")) }}
+
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
                                               database=database) -%}
+
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
@@ -13,21 +16,27 @@
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}
+
   {%- set tmp_relation = api.Relation.create(identifier=identifier,
                                                 schema="__risingwave_dbt_tmp",
                                                 database=database,
-                                                type='materializedview') -%}
-
+                                                type='materialized_view') -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   {% if old_relation is none or (full_refresh_mode and old_relation) %}
-    {% call statement('main') -%}
-      {{ risingwave__create_materialized_view_as(target_relation, sql) }}
+    {{ adapter.drop_relation(tmp_relation) }}
+    {% call statement('main') -%}      
+      {{ risingwave__create_materialized_view_as(tmp_relation, sql | replace(schema, "__risingwave_dbt_tmp")) }}
     {%- endcall %}
 
-    {{ create_indexes(target_relation) }}
+    {{ create_indexes(tmp_relation) }}
+      
+    {% if old_relation %}
+      {{ adapter.drop_relation(old_relation) }}
+    {% endif %}
+    
   {% else %}
     -- get config options
     {% set on_configuration_change = config.get('on_configuration_change') %}
@@ -53,22 +62,6 @@
     {% endif %}
   {% endif %}
 
-  {{ adapter.drop_relation(tmp_relation) }}
-
-  {% call statement('main') -%}
-    {{ risingwave__create_materialized_view_as(tmp_relation, sql) }}
-  {%- endcall %}
-
-  {% if old_relation %}
-    {{ adapter.drop_relation(old_relation) }}
-  {% endif %}
-
-  {% set query %}
-      ALTER MATERIALIZED VIEW  {{ tmp_relation }} SET SCHEMA {{ target_relation.schema }}
-  {% endset %}
-  {% do run_query(query) %}
-
-  {{ create_indexes(target_relation) }}
   {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}

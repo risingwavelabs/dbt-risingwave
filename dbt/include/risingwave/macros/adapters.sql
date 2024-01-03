@@ -174,3 +174,7 @@
     group by 1, 2, 3
     order by 1, 2, 3;
 {% endmacro %}
+
+{% macro risingwave__swap_mv_schema(relation, schema) -%}
+  ALTER MATERIALIZED VIEW  {{ relation }} SET SCHEMA {{ schema }};
+{%- endmacro %}
