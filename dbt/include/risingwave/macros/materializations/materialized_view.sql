@@ -2,7 +2,9 @@
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
 
-  {{ adapter.create_schema(api.Relation.create(database=database, schema="__risingwave_dbt_tmp")) }}
+  {%- set user = env_var("USER") -%}
+
+  {{ adapter.create_schema(api.Relation.create(database=database, schema=user+"__risingwave_dbt_tmp")) }}
 
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
@@ -20,7 +22,7 @@
 #}
 
   {%- set tmp_relation = api.Relation.create(identifier=identifier,
-                                                schema="__risingwave_dbt_tmp",
+                                                schema=user+"__risingwave_dbt_tmp",
                                                 database=database,
                                                 type='materialized_view') -%}
 
@@ -30,7 +32,7 @@
   {% if full_refresh_mode %}
     {{ adapter.drop_relation(tmp_relation) }}
     {% call statement('main') -%}      
-      {{ risingwave__create_materialized_view_as(tmp_relation, sql | replace(schema, "__risingwave_dbt_tmp")) }}
+      {{ risingwave__create_materialized_view_as(tmp_relation, sql | replace(schema, user+"__risingwave_dbt_tmp")) }}
     {%- endcall %}
 
     {{ create_indexes(tmp_relation) }}
