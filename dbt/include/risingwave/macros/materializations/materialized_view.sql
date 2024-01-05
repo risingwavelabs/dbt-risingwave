@@ -1,23 +1,38 @@
 {% materialization materialized_view, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
+
+  {%- set user = env_var("USER") -%}
+
+  {{ adapter.create_schema(api.Relation.create(database=database, schema=user+"__risingwave_dbt_tmp")) }}
+
   {%- set old_relation = adapter.get_relation(identifier=identifier,
                                               schema=schema,
                                               database=database) -%}
+
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
                                                 type='materialized_view') -%}
 
-  {% if full_refresh_mode and old_relation %}
-    {{ adapter.drop_relation(old_relation) }}
-  {% endif %}
+  {%- set tmp_relation = api.Relation.create(identifier=identifier,
+                                                schema=user+"__risingwave_dbt_tmp",
+                                                database=database,
+                                                type='materialized_view') -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% if old_relation is none or (full_refresh_mode and old_relation) %}
-    {% call statement('main') -%}
+  {% if full_refresh_mode %}
+    {{ adapter.drop_relation(tmp_relation) }}
+    {% call statement('main') -%}      
+      {{ risingwave__create_materialized_view_as(tmp_relation, sql | replace(schema, user+"__risingwave_dbt_tmp")) }}
+    {%- endcall %}
+
+    {{ create_indexes(tmp_relation) }}
+
+  {% elif old_relation is none %}
+    {% call statement('main') -%}      
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
 
