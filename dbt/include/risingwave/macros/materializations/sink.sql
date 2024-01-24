@@ -19,6 +19,8 @@
   {% call statement('main') -%}
     {% if old_relation is none or (full_refresh_mode and old_relation) %}
       {{ risingwave__run_sql(sql) }}
+    {% else %}
+      {{ risingwave__execute_no_op() }}
     {% endif %}
   {%- endcall %}
 

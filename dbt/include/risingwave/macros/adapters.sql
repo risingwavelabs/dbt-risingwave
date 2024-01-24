@@ -174,3 +174,7 @@
     group by 1, 2, 3
     order by 1, 2, 3;
 {% endmacro %}
+
+{%- macro risingwave__execute_no_op() -%}
+    select 1
+{%- endmacro -%}
