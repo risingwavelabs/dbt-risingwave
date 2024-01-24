@@ -16,13 +16,13 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% call statement('main') -%}
-    {% if old_relation is none or (full_refresh_mode and old_relation) %}
+  {% if old_relation is none or (full_refresh_mode and old_relation) %}
+    {% call statement('main') -%}
       {{ risingwave__run_sql(sql) }}
-    {% else %}
-      {{ risingwave__execute_no_op(target_relation) }}
-    {% endif %}
-  {%- endcall %}
+    {%- endcall %}
+  {% else %}
+    {{ risingwave__execute_no_op(target_relation) }}
+  {% endif %}
 
   {% do persist_docs(target_relation, model) %}
 
