@@ -16,11 +16,16 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% call statement('main') -%}
-    {{ risingwave__create_table_as(target_relation, sql) }}
-  {%- endcall %}
+  {% if old_relation is none or (full_refresh_mode and old_relation) %}
+    {% call statement('main') -%}
+      {{ risingwave__create_table_as(target_relation, sql) }}
+    {%- endcall %}
 
-  {{ create_indexes(target_relation) }}
+    {{ create_indexes(target_relation) }}
+  {% else %}
+    {{ risingwave__execute_no_op(target_relation) }}
+  {% endif %}
+
   {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}

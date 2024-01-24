@@ -16,9 +16,13 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% call statement('main') -%}
-    {{ risingwave__create_view_as(target_relation, sql) }}
-  {%- endcall %}
+  {% if old_relation is none or (full_refresh_mode and old_relation) %}
+    {% call statement('main') -%}
+      {{ risingwave__create_view_as(target_relation, sql) }}
+    {%- endcall %}
+  {% else %}
+    {{ risingwave__execute_no_op(target_relation) }}
+  {% endif %}
 
   {% do persist_docs(target_relation, model) %}
 
