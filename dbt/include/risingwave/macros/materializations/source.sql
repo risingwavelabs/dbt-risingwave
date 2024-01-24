@@ -17,7 +17,9 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   {% call statement('main') -%}
-    {{ risingwave__run_sql(sql) }}
+    {% if old_relation is none or (full_refresh_mode and old_relation) %}
+      {{ risingwave__run_sql(sql) }}
+    {% endif %}
   {%- endcall %}
 
   {% do persist_docs(target_relation, model) %}
