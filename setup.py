@@ -4,7 +4,7 @@ from setuptools import find_namespace_packages, setup
 
 package_name = "dbt-risingwave"
 # make sure this always matches dbt/adapters/{adapter}/__version__.py
-package_version = "1.6.1"
+package_version = "1.7.0"
 description = """The RisingWave adapter plugin for dbt"""
 
 with open(os.path.join(os.path.dirname(__file__), "README.md")) as f:
@@ -23,5 +23,5 @@ setup(
     url="https://github.com/risingwavelabs/dbt-risingwave",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
-    install_requires=["dbt-postgres~=1.6.0"],
+    install_requires=["dbt-postgres~=1.7.0"],
 )
