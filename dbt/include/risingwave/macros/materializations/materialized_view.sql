@@ -3,29 +3,41 @@
     {%- set identifier = model["alias"] -%}
     {%- set full_refresh_mode = should_full_refresh() -%}
 
-    {%- set custom_schema = schema ~ "__risingwave_dbt_tmp" -%}
-
-    {{ adapter.create_schema(api.Relation.create(database=database, schema=custom_schema)) }}
-
-    {%- set old_relation = adapter.get_relation(identifier=identifier, schema=schema, database=database) -%}
-
-    {%- set target_relation = api.Relation.create(
-        identifier=identifier, schema=schema, database=database, type="materialized_view"
+    {%- set old_relation = adapter.get_relation(
+        identifier=identifier,
+        schema=schema,
+        database=database,
     ) -%}
 
-    {%- set tmp_relation = api.Relation.create(
-        identifier=identifier, schema=custom_schema, database=database, type="materialized_view"
+    {%- set target_relation = api.Relation.create(
+        identifier=identifier,
+        schema=schema,
+        database=database,
+        type="materialized_view",
     ) -%}
 
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% if full_refresh_mode %}
+        {%- set custom_schema = schema ~ "__risingwave_dbt_tmp" -%}
+        -- create schema
+        {{ adapter.create_schema(api.Relation.create(database=database, schema=custom_schema)) }}
+        -- create dataobject
+        {%- set tmp_relation = api.Relation.create(
+            identifier=identifier,
+            schema=custom_schema,
+            database=database,
+            type="materialized_view",
+        ) -%}
+
+        -- clean up any existing relation
         {{ adapter.drop_relation(tmp_relation) }}
+
+        -- create the full-refresh materialized view in the temporary schema
         {% call statement("main") -%}
             {{ risingwave__create_materialized_view_as(tmp_relation, sql | replace(schema, custom_schema)) }}
         {%- endcall %}
-
         {{ create_indexes(tmp_relation) }}
 
     {% elif old_relation is none %}
