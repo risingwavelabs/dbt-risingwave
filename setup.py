@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+
 from setuptools import find_namespace_packages, setup
 
 package_name = "dbt-risingwave"
@@ -23,5 +24,5 @@ setup(
     url="https://github.com/risingwavelabs/dbt-risingwave",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
-    install_requires=["dbt-postgres~=1.7.0"],
+    install_requires=["dbt-postgres~=1.7.0", "dbt-common<1.0"],
 )
