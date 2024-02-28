@@ -48,3 +48,12 @@ repos:
         args: [--show-error-codes, --pretty, --ignore-missing-imports]
         files: ^dbt/adapters
         language: system
+  - repo: https://github.com/tconbeer/sqlfmt
+    rev: v0.21.2
+    hooks:
+      - id: sqlfmt
+        language_version: python
+        additional_dependencies: [".[jinjafmt]"]
+        args:
+          - "--line-length=120"
+          - "--fast"
