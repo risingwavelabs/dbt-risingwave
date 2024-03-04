@@ -125,17 +125,8 @@
     {%- set data_format = config.get("data_format") -%}
     {%- set data_encode = config.get("data_encode") -%}
 
-    {%- set _connector_parameters = config.get("connector_parameters") -%}
-    {%- if not _connector_parameters -%}
-        {%- set error_message = " Warning: config requires 'connector_parameters' parameter in model: {}.{}".format(model.package_name, model.name) -%}
-        {%- do exceptions.raise_compiler_error(error_message) -%}
-    {%- endif -%}
-
-    {%- set connector = config.get("connector") -%}
-    {%- if not connector -%}
-      {%- set error_message = " Warning: config requires 'connector' parameter in model: {}.{}".format(model.package_name, model.name) -%}
-      {%- do exceptions.raise_compiler_error(error_message) -%}
-    {%- endif -%}
+    {%- set _connector_parameters = config.require("connector_parameters") -%}
+    {%- set connector = config.require("connector") -%}
 
     create sink if not exists {{ relation }}
       {% if "select" in sql.lower() -%}
