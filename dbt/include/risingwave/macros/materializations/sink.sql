@@ -21,9 +21,9 @@
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% if old_relation is none or (full_refresh_mode and old_relation) %}
-        {%- set raw_sql_bool = config.get("raw_sql", true) -%}
+        {%- set connector = config.get("connector") -%}
         {% call statement("main") -%}
-            {% if not raw_sql_bool %}
+            {% if connector %}
               {{ rising_wave__create_sink(target_relation, sql) }}
             {% else %}
               {{ risingwave__run_sql(sql) }}
