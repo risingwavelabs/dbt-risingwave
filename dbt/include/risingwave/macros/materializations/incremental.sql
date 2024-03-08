@@ -32,12 +32,12 @@
   {% set to_drop = [] %}
 
   {% if existing_relation is none %}
-      {% set build_sql = get_create_table_as_sql(target_relation, sql) %}
+      {% set build_sql = risingwave__create_table_as(target_relation, sql) %}
   {% elif full_refresh_mode %}
-      {% set build_sql = get_create_table_as_sql(intermediate_relation, sql) %}
+      {% set build_sql = risingwave__create_table_as(intermediate_relation, sql) %}
       {% set need_swap = true %}
   {% else %}
-    {% do run_query(get_create_table_as_sql(temp_relation, sql)) %}
+    {% do run_query(risingwave__create_table_as(temp_relation, sql)) %}
     {% do adapter.expand_target_column_types(
              from_relation=temp_relation,
              to_relation=target_relation) %}
