@@ -41,19 +41,6 @@
 {% endmacro %}
 
 
--- temporary disable temp table for lacking support to rename table
-{% macro risingwave__make_temp_relation(base_relation, suffix) %}
-    {%- set temp_identifier = base_relation.identifier -%}
-    {%- set temp_relation = base_relation.incorporate(
-                                path={"identifier": temp_identifier}) -%}
-
-    {{ return(temp_relation) }}
-{% endmacro %}
-
-{% macro risingwave__make_intermediate_relation(base_relation, suffix) %}
-    {{ return(make_temp_relation(base_relation, suffix)) }}
-{% endmacro %}
-
 {% macro risingwave__get_create_index_sql(relation, index_dict) -%}
   {%- set index_config = adapter.parse_index(index_dict) -%}
   {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
