@@ -4,7 +4,7 @@ from setuptools import find_namespace_packages, setup
 
 package_name = "dbt-risingwave"
 # make sure this always matches dbt/adapters/{adapter}/__version__.py
-package_version = "1.7.1"
+package_version = "1.7.2"
 description = """The RisingWave adapter plugin for dbt"""
 
 with open(os.path.join(os.path.dirname(__file__), "README.md")) as f:
