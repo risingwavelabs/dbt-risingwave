@@ -24,7 +24,7 @@
         {%- set connector = config.get("connector") -%}
         {% call statement("main") -%}
             {% if connector %}
-              {{ rising_wave__create_sink(target_relation, sql) }}
+              {{ risingwave__create_sink(target_relation, sql) }}
             {% else %}
               {{ risingwave__run_sql(sql) }}
             {% endif %}

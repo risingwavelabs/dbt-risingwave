@@ -80,9 +80,8 @@
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
-  as (
-    {{ sql }}
-  );
+  as {{ sql }}
+  ;
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
@@ -91,9 +90,8 @@
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
-  as (
-    {{ sql }}
-  );
+  as {{ sql }}
+  ;
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
@@ -102,12 +100,11 @@
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
-  as (
-    {{ sql }}
-  );
+  as {{ sql }}
+  ;
 {%- endmacro %}
 
-{% macro rising_wave__create_sink(relation, sql) -%}
+{% macro risingwave__create_sink(relation, sql) -%}
     {%- set _format_parameters = config.get("format_parameters") -%}
     {%- set data_format = config.get("data_format") -%}
     {%- set data_encode = config.get("data_encode") -%}
