@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional, Type
 
-from dbt.adapters.postgres import PostgresRelation
-from dbt.dataclass_schema import StrEnum
-from dbt.utils import classproperty
+from dbt.adapters.postgres.relation import PostgresRelation
+from dbt.adapters.utils import classproperty
+from dbt_common.dataclass_schema import StrEnum
 
 
 class RisingWaveRelationType(StrEnum):
@@ -21,7 +21,6 @@ class RisingWaveRelationType(StrEnum):
 @dataclass(frozen=True, eq=False, repr=False)
 class RisingWaveRelation(PostgresRelation):
     type: Optional[RisingWaveRelationType] = None
-
 
     @classproperty
     def get_relation_type(cls) -> Type[RisingWaveRelationType]:

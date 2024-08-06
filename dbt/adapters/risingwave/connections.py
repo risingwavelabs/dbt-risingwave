@@ -1,13 +1,12 @@
-from contextlib import contextmanager
 from dataclasses import dataclass
-import dbt.exceptions  # noqa
-from dbt.adapters.base import Credentials
-from dbt.adapters.postgres import PostgresConnectionManager, PostgresCredentials
-from dbt.helper_types import Port
-from dbt.adapters.sql import SQLConnectionManager as connection_cls
-from dbt.events import AdapterLogger
 from typing import Dict, Optional
+
 import psycopg2
+from dbt.adapters.events.logging import AdapterLogger
+from dbt.adapters.postgres.connections import (
+    PostgresConnectionManager,
+    PostgresCredentials,
+)
 
 logger = AdapterLogger("RisingWave")
 
@@ -68,9 +67,7 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         search_path = credentials.search_path
         if search_path is not None and search_path != "":
             # see https://postgresql.org/docs/9.5/libpq-connect.html
-            kwargs["options"] = "-c search_path={}".format(
-                search_path.replace(" ", "\\ ")
-            )
+            kwargs["options"] = "-c search_path={}".format(search_path.replace(" ", "\\ "))
 
         if credentials.sslmode:
             kwargs["sslmode"] = credentials.sslmode
