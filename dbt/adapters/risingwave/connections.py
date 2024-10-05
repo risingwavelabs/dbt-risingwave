@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import psycopg2
+from dbt.adapters.contracts.connection import Connection
 from dbt.adapters.events.logging import AdapterLogger
 from dbt.adapters.postgres.connections import (
     PostgresConnectionManager,
@@ -134,6 +135,55 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         )
         connection.handle.cursor().execute("SET RW_IMPLICIT_FLUSH TO true")
         return connection
+
+    def cancel(self, connection: Connection):
+        # index here references the column order in processlist output:
+        # (id, user, host, database, time, info)
+        INFO_COL_INDEX, PID_COL_INDEX, pid = -1, 0, None
+
+        if not (connection_name := connection.name):
+            logger.debug("No connection name found")
+            return
+
+        if not (creds := connection.credentials):
+            logger.debug("No credentials found")
+            return
+
+        db, schema, table = (
+            creds.database,
+            creds.schema,
+            connection_name.split(".")[-1],
+        )
+        model_pattern = f'"{db}"."{schema}"."{table}"'
+
+        try:
+            _, cursor = self.add_query("SHOW PROCESSLIST")
+            if not (processlist := cursor.fetchall()):
+                logger.debug("No process list found")
+                return
+            pid = next(
+                filter(
+                    lambda p: model_pattern in str(p[INFO_COL_INDEX]),
+                    processlist,
+                )
+            )[PID_COL_INDEX]
+
+        except StopIteration:
+            logger.debug(
+                f"no model pattern ({model_pattern}) found in processlist for name: '{connection_name}'"
+            )
+            return
+        except psycopg2.InterfaceError as exc:
+            if "already closed" in str(exc) or "Session not found" in str(exc):
+                logger.debug(f"Connection '{connection_name}' already closed")
+                return
+
+        logger.debug(f"Cancelling query '{connection_name}' ({pid})")
+        try:
+            self.add_query(f"KILL {pid}")
+        except Exception as exc:
+            logger.debug(f"Error while cancelling query: {exc}")
+            raise
 
     # Disable transactions.
     def add_begin_query(self, *args, **kwargs):
