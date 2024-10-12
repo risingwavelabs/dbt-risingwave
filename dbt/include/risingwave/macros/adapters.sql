@@ -199,3 +199,31 @@
         rows_affected="-1"
     ) %}
 {% endmacro %}
+
+{% macro risingwave__handle_on_configuration_change(old_relation, target_relation) %}
+    {#
+    This macro is used to handle the `on_configuration_change` configuration option.
+    It works both for `table_with_connector`, `table` and `materialized_view` materializations.
+    #}
+
+    {% set on_configuration_change = config.get('on_configuration_change', "continue") %}
+    {% set configuration_changes = get_materialized_view_configuration_changes(old_relation, config) %}
+
+    {% if configuration_changes is none %}
+      -- do nothing
+      {{ risingwave__execute_no_op(target_relation) }}
+    {% elif on_configuration_change == 'apply' %}
+      {% call statement('main') -%}
+        {{ risingwave__update_indexes_on_materialized_view(target_relation, configuration_changes.indexes) }}
+      {%- endcall %}
+    {% elif on_configuration_change == 'continue' %}
+        -- do nothing but a warning
+        {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for {}".format(target_relation)) }}
+        {{ risingwave__execute_no_op(target_relation) }}
+    {% elif on_configuration_change == 'fail' %}
+        {{ exceptions.raise_fail_fast_error("Configuration changes were identified and `on_configuration_change` was set to `fail` for {}".format(target_relation)) }}
+    {% else %}
+        -- this only happens if the user provides a value other than `apply`, 'continue', 'fail'
+        {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
+    {% endif %}
+{% endmacro %}
