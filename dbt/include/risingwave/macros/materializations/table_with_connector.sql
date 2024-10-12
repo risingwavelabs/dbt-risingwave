@@ -23,7 +23,7 @@
 
     {{ create_indexes(target_relation) }}
   {% else %}
-    {{ risingwave__execute_no_op(target_relation) }}
+    {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
   {% endif %}
 
   {% do persist_docs(target_relation, model) %}
