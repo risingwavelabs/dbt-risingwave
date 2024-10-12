@@ -20,6 +20,8 @@
     {% call statement('main') -%}
       {{ risingwave__run_sql(sql) }}
     {%- endcall %}
+
+    {{ create_indexes(target_relation) }}
   {% else %}
     {{ risingwave__execute_no_op(target_relation) }}
   {% endif %}
