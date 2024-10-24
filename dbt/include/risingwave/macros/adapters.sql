@@ -75,6 +75,9 @@
 {% endmacro %}
 
 {% macro risingwave__create_view_as(relation, sql) -%}
+    {%- set sql_header = config.get("sql_header", none) -%}
+    {{ sql_header if sql_header is not none }}
+
   create view if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
@@ -85,6 +88,9 @@
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
+    {%- set sql_header = config.get("sql_header", none) -%}
+    {{ sql_header if sql_header is not none }}
+
   create table if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
@@ -95,6 +101,9 @@
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
+    {%- set sql_header = config.get("sql_header", none) -%}
+    {{ sql_header if sql_header is not none }}
+
   create materialized view if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
@@ -105,6 +114,9 @@
 {%- endmacro %}
 
 {% macro risingwave__create_sink(relation, sql) -%}
+    {%- set sql_header = config.get("sql_header", none) -%}
+    {{ sql_header if sql_header is not none }}
+
     {%- set _format_parameters = config.get("format_parameters") -%}
     {%- set data_format = config.get("data_format") -%}
     {%- set data_encode = config.get("data_encode") -%}
