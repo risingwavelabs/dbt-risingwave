@@ -102,10 +102,9 @@
         {{ risingwave__create_materialized_view_as(temp_relation, sql) }}
         FLUSH;
       {%- endcall %}
-
-      {# TODO(vlad): Ideally sleep for 20 minutes rather than failing... #}
-      {{ exceptions.raise_compiler_error('Materialized view being created... Please wait until it is done backfilling') }}
     {%- endif -%}
+
+    {{ create_indexes(temp_relation) }}
 
     {# The tmp exists and is initialized, we just need to swap it #}
     {%- set droppable_old_relation = api.Relation.create(identifier="internal_droppable__" ~ target_relation.identifier,
@@ -114,9 +113,7 @@
                                                 type='materialized_view') -%}
     {{ log("Swapping relation {} with {}".format(old_relation, target_relation)) }}
 
-    {# TODO(vlad): You can't just create indexes like that... #}
     {% call statement('main') -%}
-      {{ create_indexes(temp_relation) }}
       ALTER MATERIALIZED VIEW {{ temp_relation }} SWAP WITH {{ target_relation }};
       INSERT INTO relation_hashes (target_relation, hash) VALUES ('{{ target_relation }}', '{{ hash }}');
       DELETE FROM relation_hashes WHERE target_relation = '{{ temp_relation }}';
