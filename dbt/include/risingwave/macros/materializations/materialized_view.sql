@@ -16,14 +16,18 @@
   {% endif %}
 
   {%- set hash = local_md5(sql) -%}
-  {%- set has_current_mv_hash_changed_query = "SELECT coalesce((
-        SELECT hash FROM relation_hashes WHERE target_relation = '" ~ target_relation ~ "'
-      ) != '" ~ hash ~ "', true);" %}
-  {%- set are_parent_mvs_droppable_query = "SELECT coalesce((
-        SELECT definition FROM rw_materialized_views
-        JOIN rw_schemas ON rw_schemas.id = rw_materialized_views.schema_id
-        WHERE rw_schemas.name = '" ~ schema ~ "' AND rw_materialized_views.name = '" ~ identifier ~ "'
-      ), '') ilike '%internal_droppable__%';" -%}
+  {%- set has_current_mv_hash_changed_query -%}
+    SELECT coalesce((
+      SELECT hash FROM relation_hashes WHERE target_relation = '{{ target_relation }}'
+    ) != '{{ hash }}', true);
+  {%- endset -%}
+  {%- set are_parent_mvs_droppable_query -%}
+    SELECT coalesce((
+      SELECT definition FROM rw_materialized_views
+      JOIN rw_schemas ON rw_schemas.id = rw_materialized_views.schema_id
+      WHERE rw_schemas.name = '{{ schema }}' AND rw_materialized_views.name = '{{ identifier }}'
+    ), '') ilike '%internal_droppable__%';
+  {%- endset -%}
   {%- set has_current_mv_hash_changed = run_query(has_current_mv_hash_changed_query).columns[0][0] -%}
   {%- set are_parent_mvs_droppable = run_query(are_parent_mvs_droppable_query).columns[0][0] -%}
   {{ log("has_current_mv_hash_changed: " ~ has_current_mv_hash_changed) }}
@@ -73,14 +77,18 @@
     {%- set temp_relation_exists = adapter.get_relation(schema=temp_relation.schema,
                                                         identifier=temp_relation.identifier,
                                                         database=temp_relation.database) -%}
-    {%- set has_temp_relation_hash_changed_query = "SELECT coalesce((
-        SELECT hash FROM relation_hashes WHERE target_relation = '" ~ temp_relation ~ "'
-    ) != '" ~ hash ~ "', true);" -%}
-    {%- set are_temp_parent_mvs_droppable_query = "SELECT coalesce((
-        SELECT definition FROM rw_materialized_views
-        JOIN rw_schemas ON rw_schemas.id = rw_materialized_views.schema_id
-        WHERE rw_schemas.name = '" ~ schema ~ "' AND rw_materialized_views.name = '" ~ temp_relation.identifier ~ "'
-      ), '') ilike '%internal_droppable__%';" -%}
+    {%- set has_temp_relation_hash_changed_query -%}
+    SELECT coalesce((
+      SELECT hash FROM relation_hashes WHERE target_relation = '{{ temp_relation }}'
+    ) != '{{ hash }}', true);
+    {%- endset -%}
+    {%- set are_temp_parent_mvs_droppable_query -%}
+    SELECT coalesce((
+      SELECT definition FROM rw_materialized_views
+      JOIN rw_schemas ON rw_schemas.id = rw_materialized_views.schema_id
+      WHERE rw_schemas.name = '{{ schema }}' AND rw_materialized_views.name = '{{ temp_relation.identifier }}'
+    ), '') ilike '%internal_droppable__%';
+    {%- endset -%}
     {%- set has_temp_relation_hash_changed = run_query(has_temp_relation_hash_changed_query).columns[0][0] -%}
     {%- set are_temp_parent_mvs_droppable = run_query(are_temp_parent_mvs_droppable_query).columns[0][0] -%}
     {{ log("has_temp_relation_hash_changed: " ~ has_temp_relation_hash_changed) }}
@@ -107,18 +115,20 @@
     {{ create_indexes(temp_relation) }}
 
     {# The tmp exists and is initialized, we just need to swap it #}
+    {{ log("Swapping relation {} with {}".format(old_relation, target_relation)) }}
+
     {%- set droppable_old_relation = api.Relation.create(identifier="internal_droppable__" ~ target_relation.identifier,
                                                 schema=target_relation.schema,
                                                 database=target_relation.database,
                                                 type='materialized_view') -%}
-    {{ log("Swapping relation {} with {}".format(old_relation, target_relation)) }}
+    {%- set droppable_old_relation_identifier = make_temp_relation(droppable_old_relation) -%}
 
     {% call statement('main') -%}
       ALTER MATERIALIZED VIEW {{ temp_relation }} SWAP WITH {{ target_relation }};
       INSERT INTO relation_hashes (target_relation, hash) VALUES ('{{ target_relation }}', '{{ hash }}');
       DELETE FROM relation_hashes WHERE target_relation = '{{ temp_relation }}';
       FLUSH;
-      ALTER MATERIALIZED VIEW {{ temp_relation }} RENAME TO {{ droppable_old_relation.identifier }};
+      ALTER MATERIALIZED VIEW {{ temp_relation }} RENAME TO {{ droppable_old_relation_identifier }};
       FLUSH;
     {%- endcall %}
   {% else %}
