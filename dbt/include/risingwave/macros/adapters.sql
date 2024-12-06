@@ -40,11 +40,14 @@
   {{ return(sql_convert_columns_in_relation(table)) }}
 {% endmacro %}
 
+{% macro risingwave__get_index_name(name, columns) -%}
+    {{ return("__dbt_index_{}_{}".format(name, "_".join(columns))) }}
+{% endmacro %}
 
 {% macro risingwave__get_create_index_sql(relation, index_dict) -%}
   {%- set index_config = adapter.parse_index(index_dict) -%}
   {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
-  {%- set index_name = "__dbt_index_" + relation.identifier + "_" + "_".join(index_config.columns) -%}
+  {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
 
   create index if not exists
   "{{ index_name }}"
@@ -52,8 +55,9 @@
   ({{ comma_separated_columns }});
 {%- endmacro %}
 
-{%- macro risingwave__get_drop_index_sql(relation, index_name) -%}
-    drop index if exists "{{ relation.schema }}"."{{ index_name }}"
+{%- macro risingwave__get_drop_index_sql(name, columns) -%}
+    {%- set index_name = risingwave__get_index_name(name, columns) -%}
+    drop index if exists "{{ index_name }}";
 {%- endmacro -%}
 
 {% macro risingwave__drop_relation(relation) -%}
@@ -164,7 +168,7 @@
 
         {%- if _index_change.action == "drop" -%}
 
-            {{ risingwave__get_drop_index_sql(relation, _index.name) }};
+            {{ risingwave__get_drop_index_sql(_index.name, _index.column_names) }};
 
         {%- elif _index_change.action == "create" -%}
 
