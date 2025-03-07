@@ -78,6 +78,28 @@
   {%- endcall %}
 {% endmacro %}
 
+{% macro risingwave__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
+    {% set skip_if_exists = model.get('config', {}).get('skip_if_exists', false) %}
+    {% if old_relation is not none and skip_if_exists and not full_refresh %}
+        {{ risingwave__execute_no_op(old_relation) }}
+    {% else %}
+        {{ default__reset_csv_table(model, full_refresh, old_relation, agate_table) }}
+    {% endif %}
+{% endmacro %}
+
+{% macro risingwave__load_csv_rows(model, agate_table) -%}
+    {% if config.get('skip_if_exists', false) and not should_full_refresh() %}
+        {% set relation = adapter.get_relation(
+            database=model.get("database"),
+            schema=model.get("schema"),
+            identifier=model.get("name")
+        ) %}
+        {{ risingwave__execute_no_op(relation) }}
+    {% else %}
+        {{ default__load_csv_rows(model, agate_table) }}
+    {% endif %}
+{% endmacro %}
+
 {% macro risingwave__create_view_as(relation, sql) -%}
     {%- set sql_header = config.get("sql_header", none) -%}
     {{ sql_header if sql_header is not none }}
