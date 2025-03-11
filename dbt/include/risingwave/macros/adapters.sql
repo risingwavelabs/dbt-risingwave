@@ -243,3 +243,9 @@
         {{ exceptions.raise_compiler_error("Unexpected configuration scenario") }}
     {% endif %}
 {% endmacro %}
+
+{% macro risingwave__truncate_relation(relation) -%}
+  {% call statement('truncate_relation') -%}
+    delete from {{ relation }}
+  {%- endcall %}
+{% endmacro %}
