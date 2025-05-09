@@ -13,15 +13,15 @@ The package has not been published to PyPI, please install it via git.
 
 1. Install `dbt-risingwave`
 
-```shell
+``` shell
 python3 -m pip install dbt-risingwave
 ```
 
 2. Get `RisingWave` running
 
-Please follow [this](https://www.risingwave.dev/docs/current/get-started/) guide to setup a functional RisingWave instance.
+Please follow [this](https://www.risingwave.dev/docs/current/get-started/) guide to set up a functional RisingWave instance.
 
-3. Configure `dbt` profile file
+3. Configure the `dbt` profile file
 
 The profile file is located in `~/.dbt/profiles.yml`. Here's an example of how to use it with RisingWave.
 
@@ -39,25 +39,25 @@ default:
   target: dev
 ```
 
-4. Run `dbt debug` to check whether configuration is correct.
+4. Run `dbt debug` to check whether the configuration is correct.
 
 ## Models
 
-The dbt models for managing data transformations in RisingWave is similar to typical dbt sql models. The main differences are the materializations. We customized the materializations to fit the data processing model of RisingWave.
+The dbt models for managing data transformations in RisingWave are similar to typical dbt sql models. The main differences are the materializations. We customized the materializations to fit the data processing model of RisingWave.
 
 | Materializations      | INFO                   |
 | ---------------------- | --------------------- |
-| materialized_view      | Create a materialized view. This materialization is corresponding to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files.                      |
+| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files.                      |
 | materializedview       | (Deprecated) only for backward compatibility, use `materialized_view` instead                      |
 | ephemeral              | This materialization uses common table expressions in RisingWave under the hood. To use this materialization, add {{ config(materialized='ephemeral') }} to your model SQL files.                      |
 | table                  | Create a table. To use this materialization, add {{ config(materialized='table') }} to your model SQL files. |
 | view                   | Create a view. To use this materialization, add {{ config(materialized='view') }} to your model SQL files. |
-| incremental            | Use `materialized_view` instead if possible, since RisingWave is designed to use materialized view to manage data transformation in an incremental way. From v1.7.3, dbt-risingwave support `incremental` model to give users better control of when to update their model. This model will update table in a batch way incrementally.                     |
+| incremental            | Use `materialized_view` instead if possible, since RisingWave is designed to use a materialized view to manage data transformation in an incremental way. From v1.7.3, dbt-risingwave supports `incremental` model to give users better control of when to update their model. This model will update the table in a batch way incrementally.                     |
 | source                 | Define a source {{ config(materialized='source') }}. You need to provide your create source statement as a whole in this model.                      |
-| table_with_connector   | Define a table with a connector {{ config(materialized='table_with_connector') }}. You need to provide your create table with connector statement as a whole in this model. Because dbt `table` has its own semantics, RisingWave use `table_with_connector` to distinguish itself from it.                      |
+| table_with_connector   | Define a table with a connector {{ config(materialized='table_with_connector') }}. You need to provide your create table with connector statement as a whole in this model. Because dbt `table` has its own semantics, RisingWave uses `table_with_connector` to distinguish itself from it.  The connector is optional if you just want to define a table without anything connector.                    |
 | sink                   | Define a sink {{ config(materialized='sink') }}. You need to provide your create sink statement as a whole in this model.                      |
 
-To learn how to use, you can check RisingWave offical example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark).
+To learn how to use, you can check RisingWave's official example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark).
 
 ## DBT RUN behavior
 
@@ -76,7 +76,7 @@ dbt run --select "+my_model+"         # select my_model, and all of its parents 
 
 ## Tests
 
-All items below have been tested against the the latest RisingWave daily build verison.
+All items below have been tested against the latest RisingWave daily build version.
 
 - [x] Offical example [jaffle_shop](https://github.com/dbt-labs/jaffle_shop) is tested.
 - [x] RisingWave offical example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark) is tested.
