@@ -7,14 +7,15 @@
     '{{ schema_relation.database }}' as database,
     rw_relations.name as name,
     rw_schemas.name as schema,
-    CASE WHEN relation_type = 'materialized view' THEN
+    FIRST_VALUE(CASE WHEN relation_type = 'materialized view' THEN
       'materialized_view'
       else relation_type
-    END AS type
+    END order by relation_type desc) AS type
     from rw_relations join rw_schemas on schema_id=rw_schemas.id
     where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
     and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
     AND rw_schemas.name = '{{ schema_relation.schema }}'
+    group by database, name, schema
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
