@@ -247,6 +247,18 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 3. **Monitor Storage**: Track storage usage as temporary MVs accumulate
 4. **Test Dependencies**: Verify downstream MV behavior before enabling immediate cleanup
 5. **Cleanup Automation**: Consider automating temporary MV cleanup in your deployment pipeline
+6. **Resource Planning**: Ensure cluster has sufficient capacity for doubled resource usage during rebuilds
+7. **Sink Management**: 
+   - **Document Sink Dependencies**: Maintain documentation of which MVs have downstream Sinks
+   - **Plan Sink Updates**: Prepare Sink update procedures before MV rebuilds
+   - **Test Sink Compatibility**: Verify Sink behavior with new MV schemas in non-production environments
+   - **Consider Maintenance Windows**: Schedule MV rebuilds with Sinks during low-impact periods
+8. **Monitoring and Alerting**:
+   - Set up alerts for temporary MV accumulation
+   - Monitor cluster resource usage during rebuilds
+   - Track rebuild success/failure rates
+9. **Staged Rollouts**: Test zero downtime rebuilds on smaller, less critical MVs first
+10. **Documentation**: Keep team documentation updated with zero downtime procedures and Sink update workflows
 
 ## Cleanup Workflow
 
@@ -275,6 +287,9 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 2. **Storage Growth**: Monitor disk usage and clean up temporary MVs regularly
 3. **Permission Issues**: Ensure the dbt user has CREATE, DROP, and ALTER permissions for MVs
 4. **Downstream MV Failures**: Check if immediate cleanup is affecting dependent MVs
+5. **Sink Connection Issues**: Verify that downstream Sinks are properly updated after MV rebuilds
+6. **Resource Exhaustion**: Monitor cluster resources during rebuilds, especially for large MVs
+7. **Schema Mismatch**: Ensure Sink schemas are compatible with rebuilt MV schemas
 
 ### Debugging Tips
 
@@ -283,6 +298,14 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 3. Use `dbt ls` command to verify model states
 4. Monitor for orphaned temporary MVs in your RisingWave instance
 5. Use the provided utilities to inspect and manage temporary MVs
+6. **Sink Debugging**:
+   - Check Sink status after MV rebuilds: `SHOW SINKS;`
+   - Verify Sink schema compatibility with new MV schema
+   - Monitor Sink error logs for schema-related issues
+7. **Resource Monitoring**:
+   - Monitor cluster memory usage during rebuilds
+   - Check for resource constraints in RisingWave logs
+   - Track CPU and storage utilization patterns
 
 ## Configuration Reference
 
@@ -293,11 +316,84 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 
 ## Limitations
 
-- Requires RisingWave support for `ALTER MATERIALIZED VIEW SWAP` syntax
-- Only applicable to `materialized_view` and `materializedview` materializations
-- Not compatible with full refresh operations
-- Requires additional storage capacity during rebuild process
-- Temporary MVs require manual cleanup when using default settings
+### Core Limitations
+
+- **RisingWave Version Requirement**: Requires RisingWave support for `ALTER MATERIALIZED VIEW SWAP` syntax
+- **Materialization Compatibility**: Only applicable to `materialized_view` and `materializedview` materializations
+- **Full Refresh Incompatibility**: Not compatible with full refresh operations (`--full-refresh`)
+- **Storage Requirements**: Requires additional storage capacity during rebuild process
+
+### Downstream Sink Handling
+
+**⚠️ Critical Limitation**: Zero downtime rebuilds **do not automatically handle downstream Sinks** that depend on the materialized view.
+
+When a materialized view has downstream Sinks:
+1. **Manual Intervention Required**: You must manually recreate or update Sinks after the MV rebuild
+2. **Pipeline Disruption**: The data pipeline may be temporarily disrupted until Sinks are updated
+3. **Sink Dependencies**: Sinks will continue to reference the old MV definition until manually updated
+
+**Example Scenario**:
+```sql
+-- Original MV
+CREATE MATERIALIZED VIEW user_stats AS SELECT id, name FROM users;
+
+-- Downstream Sink
+CREATE SINK user_sink FROM user_stats WITH (...);
+
+-- After zero downtime rebuild with new column:
+-- MV now has: SELECT id, name, email FROM users;
+-- But Sink still references old schema - manual update required
+```
+
+**Recommended Approach for Sinks**:
+1. Plan MV updates during maintenance windows when Sink disruption is acceptable
+2. Update Sinks immediately after MV rebuild
+3. Consider using traditional rebuild methods for MVs with critical downstream Sinks
+
+### Resource and Performance Impact
+
+**⚠️ Resource Doubling**: During zero downtime rebuilds, your cluster will temporarily experience **doubled resource usage**:
+
+- **Memory Usage**: Both old and new MVs exist simultaneously, doubling memory consumption
+- **CPU Load**: Concurrent processing of two MVs increases CPU utilization
+- **Storage Space**: Requires storage for both versions until cleanup
+- **Network I/O**: Data transfer for maintaining both MVs impacts network resources
+
+**Planning Considerations**:
+- Ensure sufficient cluster capacity before initiating large MV rebuilds
+- Monitor resource usage during rebuild operations
+- Schedule rebuilds during low-traffic periods
+- Consider staggered rebuilds for multiple large MVs
+
+### Temporary MV Management
+
+**⚠️ Manual Cleanup Required**: Zero downtime rebuilds create temporary MVs that require manual cleanup:
+
+**Default Behavior**:
+- Temporary MVs are **preserved by default** to protect downstream dependencies
+- These MVs consume cluster resources until manually removed
+- Accumulation of temporary MVs can lead to resource exhaustion
+
+**Cleanup Responsibilities**:
+```bash
+# Regular cleanup is essential - run these commands periodically:
+dbt run-operation list_temp_mvs                    # Check for temporary MVs
+dbt run-operation cleanup_temp_mvs                 # Preview cleanup (dry run)
+dbt run-operation cleanup_temp_mvs --args '{"execute": true}'  # Execute cleanup
+```
+
+**Monitoring Requirements**:
+- Set up regular monitoring for temporary MV accumulation
+- Establish cleanup schedules in your deployment pipeline
+- Track storage usage growth from temporary MVs
+
+### Production Considerations
+
+- **Testing Required**: Thoroughly test zero downtime rebuilds in non-production environments
+- **Rollback Planning**: Have rollback procedures ready in case of rebuild failures  
+- **Monitoring Setup**: Implement monitoring for resource usage during rebuilds
+- **Documentation**: Document your specific Sink update procedures
+- **Team Coordination**: Ensure team awareness of manual cleanup requirements
 
 ## Additional Notes
 
