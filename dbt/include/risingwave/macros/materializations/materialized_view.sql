@@ -52,8 +52,8 @@
         {{ risingwave__create_materialized_view_with_temp_name(temp_relation, sql) }}
       {%- endcall %}
 
-      {# Step 2: Swap the materialized views #}
-      {% call statement('swap_mv') -%}
+      {# Step 2: Swap the materialized views - This is the main operation #}
+      {% call statement('main') -%}
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
