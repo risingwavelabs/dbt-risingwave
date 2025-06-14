@@ -9,7 +9,7 @@
                                                 database=database,
                                                 type='materialized_view') -%}
 
-  {%- set zero_downtime_mode = config.get('zero_downtime', true) -%}
+  {%- set zero_downtime_mode = config.get('zero_downtime', false) -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
@@ -48,12 +48,12 @@
       ) -%}
 
       {# Step 1: Create temporary materialized view #}
-      {% call statement('create_temp_mv') -%}
+      {% call statement('main') -%}
         {{ risingwave__create_materialized_view_with_temp_name(temp_relation, sql) }}
       {%- endcall %}
 
       {# Step 2: Swap the materialized views - This is the main operation #}
-      {% call statement('main') -%}
+      {% call statement('swap') -%}
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
