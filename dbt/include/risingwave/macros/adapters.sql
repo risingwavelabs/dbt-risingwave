@@ -298,7 +298,7 @@
   {%- set cleaned_count = 0 -%}
   
   {% if temp_mvs %}
-    {{- log("Found " ~ temp_mvs | length ~ " temporary materialized views") -}}
+    {{ print("Found " ~ temp_mvs | length ~ " temporary materialized views") }}
     
     {% for temp_mv in temp_mvs %}
       {%- set mv_relation = api.Relation.create(
@@ -309,9 +309,9 @@
       ) -%}
       
       {% if dry_run %}
-        {{- log("DRY RUN: Would drop " ~ mv_relation) -}}
+        {{ print("DRY RUN: Would drop " ~ mv_relation) }}
       {% else %}
-        {{- log("Dropping temporary materialized view: " ~ mv_relation) -}}
+        {{ print("Dropping temporary materialized view: " ~ mv_relation) }}
         {% call statement('drop_temp_mv_' ~ loop.index) -%}
           DROP MATERIALIZED VIEW IF EXISTS {{ mv_relation }} CASCADE
         {%- endcall %}
@@ -320,56 +320,56 @@
     {% endfor %}
     
     {% if not dry_run %}
-      {{- log("Cleaned up " ~ cleaned_count ~ " temporary materialized views") -}}
+      {{ print("Cleaned up " ~ cleaned_count ~ " temporary materialized views") }}
     {% endif %}
   {% else %}
-    {{- log("No temporary materialized views found") -}}
+    {{ print("No temporary materialized views found") }}
   {% endif %}
 {%- endmacro %}
 
 {#-- User-friendly wrapper macros for dbt run-operation --#}
 
 {%- macro list_temp_mvs(schema_name=none) -%}
-  {{- log("=== Listing Temporary Materialized Views ===") -}}
+  {{ print("=== Listing Temporary Materialized Views ===") }}
   {%- if schema_name -%}
-    {{- log("Schema: " ~ schema_name) -}}
+    {{ print("Schema: " ~ schema_name) }}
   {%- else -%}
-    {{- log("Schema: All schemas") -}}
+    {{ print("Schema: All schemas") }}
   {%- endif -%}
-  {{- log("") -}}
+  {{ print("") }}
   
   {%- set temp_mvs = risingwave__list_temp_materialized_views(schema_name) -%}
   
   {% if temp_mvs %}
-    {{- log("Found " ~ temp_mvs | length ~ " temporary materialized views:") -}}
+    {{ print("Found " ~ temp_mvs | length ~ " temporary materialized views:") }}
     {% for temp_mv in temp_mvs %}
-      {{- log("  - " ~ temp_mv[0] ~ "." ~ temp_mv[1]) -}}
+      {{ print("  - " ~ temp_mv[0] ~ "." ~ temp_mv[1]) }}
     {% endfor %}
   {% else %}
-    {{- log("No temporary materialized views found.") -}}
+    {{ print("No temporary materialized views found.") }}
   {% endif %}
-  {{- log("") -}}
+  {{ print("") }}
 {%- endmacro %}
 
 {%- macro cleanup_temp_mvs(schema_name=none, execute=false) -%}
-  {{- log("=== Temporary Materialized Views Cleanup ===") -}}
+  {{ print("=== Temporary Materialized Views Cleanup ===") }}
   {%- if schema_name -%}
-    {{- log("Schema: " ~ schema_name) -}}
+    {{ print("Schema: " ~ schema_name) }}
   {%- else -%}
-    {{- log("Schema: All schemas") -}}
+    {{ print("Schema: All schemas") }}
   {%- endif -%}
-  {{- log("Mode: " ~ ("EXECUTE" if execute else "DRY RUN")) -}}
-  {{- log("") -}}
+  {{ print("Mode: " ~ ("EXECUTE" if execute else "DRY RUN")) }}
+  {{ print("") }}
   
   {{ risingwave__cleanup_temp_materialized_views(schema_name=schema_name, dry_run=(not execute)) }}
   
   {% if not execute %}
-    {{- log("") -}}
-    {{- log("To actually clean up these temporary MVs, run:") -}}
+    {{ print("") }}
+    {{ print("To actually clean up these temporary MVs, run:") }}
     {% if schema_name %}
-      {{- log('dbt run-operation cleanup_temp_mvs --args \'{"schema_name": "' ~ schema_name ~ '", "execute": true}\'') -}}
+      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"schema_name": "' ~ schema_name ~ '", "execute": true}\'') }}
     {% else %}
-      {{- log('dbt run-operation cleanup_temp_mvs --args \'{"execute": true}\'') -}}
+      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"execute": true}\'') }}
     {% endif %}
   {% endif %}
 {%- endmacro %}

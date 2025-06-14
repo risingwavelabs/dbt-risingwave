@@ -102,6 +102,8 @@ dbt run-operation cleanup_temp_mvs --args '{"execute": true}'
 dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public", "execute": true}'
 ```
 
+**Note**: These commands will display output directly to the console without requiring special log level settings.
+
 ### Alternative: Using Internal Macros
 
 For advanced users, you can also call the internal macros directly:
