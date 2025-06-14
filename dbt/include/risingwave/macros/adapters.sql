@@ -266,7 +266,7 @@
 {%- endmacro %}
 
 {%- macro risingwave__swap_materialized_views(old_relation, new_relation) -%}
-  alter materialized view {{ old_relation }} swap {{ new_relation }}
+  alter materialized view {{ old_relation }} swap with {{ new_relation }}
 {%- endmacro %}
 
 {%- macro risingwave__zero_downtime_materialized_view_rebuild(old_relation, target_relation, sql) -%}
