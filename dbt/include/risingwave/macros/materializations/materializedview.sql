@@ -10,6 +10,7 @@
                                                 type='materializedview') -%}
 
   {%- set zero_downtime_mode = config.get('zero_downtime', false) -%}
+  {%- set immediate_cleanup = config.get('zero_downtime_immediate_cleanup', false) -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
@@ -52,15 +53,21 @@
         {{ risingwave__create_materialized_view_with_temp_name(temp_relation, sql) }}
       {%- endcall %}
 
-      {# Step 2: Swap the materialized views - This is the main operation #}
+      {# Step 2: Swap the materialized views #}
       {% call statement('swap') -%}
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
-      {# Step 3: Drop the old materialized view (now with temp name) #}
-      {% call statement('drop_old_mv') -%}
-        drop materialized view if exists {{ temp_relation }} cascade
-      {%- endcall %}
+      {# Step 3: Conditionally drop the old materialized view (now with temp name) #}
+      {% if immediate_cleanup %}
+        {{- log("Immediately cleaning up temporary materialized view: " ~ temp_relation) -}}
+        {% call statement('drop_old_mv') -%}
+          drop materialized view if exists {{ temp_relation }} cascade
+        {%- endcall %}
+      {% else %}
+        {{- log("Preserving temporary materialized view for downstream dependencies: " ~ temp_relation) -}}
+        {{- log("Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS " ~ temp_relation ~ ";") -}}
+      {% endif %}
       
       {{ create_indexes(target_relation) }}
     {% else %}

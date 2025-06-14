@@ -10,7 +10,7 @@ When a Materialized View definition changes, instead of dropping and recreating 
 
 1. **Create Temporary MV**: Creates a new Materialized View with a temporary name using the updated SQL definition
 2. **Atomic Swap**: Uses `ALTER MATERIALIZED VIEW {original} SWAP WITH {temp}` to atomically exchange the original and temporary MVs
-3. **Cleanup**: Drops the old MV (now using the temporary name)
+3. **Conditional Cleanup**: Optionally drops the old MV (now using the temporary name) based on configuration
 
 This ensures the original MV name remains available throughout the entire process, achieving true zero downtime updates.
 
@@ -35,6 +35,26 @@ SELECT
 FROM {{ ref('source_table') }}
 ```
 
+### Configuring Cleanup Behavior
+
+By default, temporary MVs are **preserved** to avoid affecting downstream dependencies. You can control cleanup behavior:
+
+```sql
+-- Immediate cleanup (may affect downstream MVs)
+{{ config(
+    materialized='materialized_view',
+    zero_downtime=true,
+    zero_downtime_immediate_cleanup=true
+) }}
+
+-- Deferred cleanup (default, preserves downstream dependencies)
+{{ config(
+    materialized='materialized_view',
+    zero_downtime=true,
+    zero_downtime_immediate_cleanup=false
+) }}
+```
+
 ### Default Behavior (Zero Downtime Disabled)
 
 By default, zero downtime functionality is disabled and uses traditional configuration change handling:
@@ -46,18 +66,52 @@ By default, zero downtime functionality is disabled and uses traditional configu
 SELECT * FROM {{ ref('source_table') }}
 ```
 
-### Explicitly Disabling Zero Downtime
+## Temporary MV Management
 
-To explicitly indicate the use of traditional handling, you can set:
+### Understanding the Cleanup Strategy
 
-```sql
--- models/my_model.sql
-{{ config(
-    materialized='materialized_view',
-    zero_downtime=false
-) }}
+**Default Behavior (Recommended)**: Temporary MVs are preserved after swap to maintain downstream dependencies. This prevents CASCADE drops from affecting dependent MVs, ensuring true zero downtime.
 
-SELECT * FROM {{ ref('source_table') }}
+**Immediate Cleanup**: When enabled, temporary MVs are dropped immediately after swap. This may affect downstream MVs if they depend on the original MV.
+
+### Managing Temporary MVs with dbt Commands
+
+#### Listing Temporary MVs
+
+```bash
+# List all temporary MVs across all schemas
+dbt run-operation list_temp_mvs
+
+# List temporary MVs in a specific schema
+dbt run-operation list_temp_mvs --args '{"schema_name": "public"}'
+```
+
+#### Cleaning Up Temporary MVs
+
+```bash
+# Dry run - see what would be cleaned up (safe to run)
+dbt run-operation cleanup_temp_mvs
+
+# Dry run for specific schema
+dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public"}'
+
+# Actually clean up temporary MVs (caution: this will drop MVs)
+dbt run-operation cleanup_temp_mvs --args '{"execute": true}'
+
+# Clean up temporary MVs in specific schema
+dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public", "execute": true}'
+```
+
+### Alternative: Using Internal Macros
+
+For advanced users, you can also call the internal macros directly:
+
+```bash
+# List temporary MVs (internal macro)
+dbt run-operation risingwave__list_temp_materialized_views
+
+# Cleanup with internal macro
+dbt run-operation risingwave__cleanup_temp_materialized_views --args '{"dry_run": false}'
 ```
 
 ## When Zero Downtime Rebuilds Trigger
@@ -89,10 +143,12 @@ Example: `my_model_tmp_20231201_143022_123456`
 
 ### Implementation Macros
 
-The feature relies on two core macros:
+The feature relies on several core macros:
 
 1. **`risingwave__create_materialized_view_with_temp_name`**: Generates SQL to create an MV with a temporary name
 2. **`risingwave__swap_materialized_views`**: Generates SQL for the MV swap operation
+3. **`risingwave__list_temp_materialized_views`**: Lists temporary MVs for cleanup management
+4. **`risingwave__cleanup_temp_materialized_views`**: Utility for cleaning up temporary MVs
 
 ### Execution Flow
 
@@ -105,16 +161,25 @@ CREATE MATERIALIZED VIEW my_model_tmp_20231201_143022_123456 AS ...
 -- Step 2: Swap the materialized views
 ALTER MATERIALIZED VIEW my_model SWAP WITH my_model_tmp_20231201_143022_123456
 
--- Step 3: Clean up old materialized view
+-- Step 3: Conditional cleanup (only if immediate_cleanup=true)
 DROP MATERIALIZED VIEW IF EXISTS my_model_tmp_20231201_143022_123456 CASCADE
 ```
 
 ## Log Output
 
-When zero downtime rebuild is active, you'll see this message in the logs:
-
+### Zero Downtime Rebuild
 ```
 Using zero downtime rebuild with SWAP for materialized view update.
+```
+
+### Cleanup Behavior
+```
+# When immediate_cleanup=false (default)
+Preserving temporary materialized view for downstream dependencies: my_model_tmp_20231201_143022_123456
+Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS my_model_tmp_20231201_143022_123456;
+
+# When immediate_cleanup=true
+Immediately cleaning up temporary materialized view: my_model_tmp_20231201_143022_123456
 ```
 
 ## Error Handling
@@ -131,63 +196,81 @@ If errors occur during the zero downtime rebuild process:
 - ✅ **Documentation**: Supports documentation persistence
 - ✅ **Hooks**: Compatible with pre/post hooks
 - ✅ **Configuration Changes**: Works with existing configuration change handling
+- ✅ **Downstream Dependencies**: Preserves downstream MV dependencies by default
 
 ## Performance Considerations
 
 - Zero downtime rebuilds require additional storage space for temporary MVs
 - SWAP operations may have brief performance impact under high load
 - Consider scheduling large MV rebuilds during low-traffic periods
+- Temporary MVs may accumulate if not cleaned up regularly
 
 ## Example Scenarios
 
-### Scenario 1: Enabling Zero Downtime Rebuild
+### Scenario 1: Safe Zero Downtime Rebuild (Recommended)
 
 ```sql
--- Enable zero downtime functionality
+-- Safe approach: preserve downstream dependencies
 {{ config(
     materialized='materialized_view',
     zero_downtime=true
 ) }}
 
--- Original definition
-SELECT id, name FROM users
-
--- Updated definition
 SELECT id, name, email FROM users
 ```
 
-With zero downtime rebuild enabled, user queries will not be interrupted during the update.
+This preserves temporary MVs to protect downstream dependencies. Clean up manually when safe.
 
-### Scenario 2: Using Default Behavior
+### Scenario 2: Immediate Cleanup (Use with Caution)
 
 ```sql
--- Default behavior (no zero downtime)
-{{ config(materialized='materialized_view') }}
+-- Immediate cleanup: may affect downstream MVs
+{{ config(
+    materialized='materialized_view',
+    zero_downtime=true,
+    zero_downtime_immediate_cleanup=true
+) }}
 
-SELECT 
-    user_id, 
-    COUNT(*) as order_count 
-FROM orders 
-GROUP BY user_id
+SELECT id, name, email FROM users
 ```
 
-Uses traditional configuration change handling.
+This immediately cleans up temporary MVs but may affect downstream dependencies.
 
 ## Best Practices
 
-1. **Selective Enablement**: Only enable this feature in production environments where zero downtime is truly required
-2. **Monitor Temporary MVs**: Regularly check for and clean up any orphaned temporary MVs
-3. **Storage Planning**: Ensure adequate storage space to accommodate temporary MVs
-4. **Testing**: Thoroughly test the feature in development environments before production use
-5. **Rollback Planning**: Prepare rollback procedures for unexpected scenarios
+1. **Use Default Cleanup Strategy**: Keep `zero_downtime_immediate_cleanup=false` to protect downstream dependencies
+2. **Regular Cleanup**: Schedule periodic cleanup of temporary MVs using the provided utilities
+3. **Monitor Storage**: Track storage usage as temporary MVs accumulate
+4. **Test Dependencies**: Verify downstream MV behavior before enabling immediate cleanup
+5. **Cleanup Automation**: Consider automating temporary MV cleanup in your deployment pipeline
+
+## Cleanup Workflow
+
+### Recommended Cleanup Process
+
+1. **Complete Model Updates**: Finish updating all dependent MVs
+2. **Verify Dependencies**: Ensure all downstream MVs are functioning correctly
+3. **Clean Up Safely**: Use the cleanup utilities to remove temporary MVs
+
+```sql
+-- Step 1: List temporary MVs
+{{ risingwave__list_temp_materialized_views() }}
+
+-- Step 2: Dry run cleanup
+{{ risingwave__cleanup_temp_materialized_views(dry_run=true) }}
+
+-- Step 3: Actual cleanup
+{{ risingwave__cleanup_temp_materialized_views(dry_run=false) }}
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Temporary MV Name Conflicts**: Extremely rare due to microsecond-precision timestamps
-2. **Permission Issues**: Ensure the dbt user has CREATE, DROP, and ALTER permissions for MVs
-3. **Insufficient Storage**: Monitor storage usage to ensure adequate space
+1. **Accumulating Temporary MVs**: Set up regular cleanup processes
+2. **Storage Growth**: Monitor disk usage and clean up temporary MVs regularly
+3. **Permission Issues**: Ensure the dbt user has CREATE, DROP, and ALTER permissions for MVs
+4. **Downstream MV Failures**: Check if immediate cleanup is affecting dependent MVs
 
 ### Debugging Tips
 
@@ -195,16 +278,25 @@ Uses traditional configuration change handling.
 2. Check RisingWave logs for detailed SWAP operation information
 3. Use `dbt ls` command to verify model states
 4. Monitor for orphaned temporary MVs in your RisingWave instance
+5. Use the provided utilities to inspect and manage temporary MVs
 
 ## Configuration Reference
 
 | Config Option | Default | Description |
 |---------------|---------|-------------|
 | `zero_downtime` | `false` | Enables zero downtime rebuilds when set to `true` |
+| `zero_downtime_immediate_cleanup` | `false` | Controls whether temporary MVs are immediately dropped after swap |
 
 ## Limitations
 
 - Requires RisingWave support for `ALTER MATERIALIZED VIEW SWAP` syntax
 - Only applicable to `materialized_view` and `materializedview` materializations
 - Not compatible with full refresh operations
-- Requires additional storage capacity during rebuild process 
+- Requires additional storage capacity during rebuild process
+- Temporary MVs require manual cleanup when using default settings
+
+## Additional Notes
+
+- This feature is designed to work with RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax, which is not supported in all versions of RisingWave.
+- Ensure that your RisingWave version supports the necessary syntax for this feature to work.
+- If you encounter issues with this feature, please check the RisingWave documentation for any version-specific limitations or requirements. 
