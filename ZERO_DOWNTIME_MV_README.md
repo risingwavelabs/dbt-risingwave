@@ -137,11 +137,13 @@ The following scenarios will use traditional configuration change handling:
 
 ### Temporary MV Naming Convention
 
-Temporary MVs follow the naming pattern: `{original_name}_tmp_{timestamp}`
+Temporary MVs follow the naming pattern: `{original_name}_dbt_zero_down_tmp_{timestamp}`
 
 The timestamp format is: `YYYYMMDD_HHMMSS_microseconds`
 
-Example: `my_model_tmp_20231201_143022_123456`
+Example: `my_model_dbt_zero_down_tmp_20231201_143022_123456`
+
+**Security Note**: The specific naming pattern `_dbt_zero_down_tmp_` is used to avoid conflicts with user-created tables that might contain generic patterns like `_tmp_`.
 
 ### Implementation Macros
 
@@ -158,13 +160,13 @@ When zero downtime rebuild is enabled, the following SQL operations are executed
 
 ```sql
 -- Step 1: Create temporary materialized view (main statement)
-CREATE MATERIALIZED VIEW my_model_tmp_20231201_143022_123456 AS ...
+CREATE MATERIALIZED VIEW my_model_dbt_zero_down_tmp_20231201_143022_123456 AS ...
 
 -- Step 2: Swap the materialized views
-ALTER MATERIALIZED VIEW my_model SWAP WITH my_model_tmp_20231201_143022_123456
+ALTER MATERIALIZED VIEW my_model SWAP WITH my_model_dbt_zero_down_tmp_20231201_143022_123456
 
 -- Step 3: Conditional cleanup (only if immediate_cleanup=true)
-DROP MATERIALIZED VIEW IF EXISTS my_model_tmp_20231201_143022_123456 CASCADE
+DROP MATERIALIZED VIEW IF EXISTS my_model_dbt_zero_down_tmp_20231201_143022_123456 CASCADE
 ```
 
 ## Log Output
@@ -177,11 +179,11 @@ Using zero downtime rebuild with SWAP for materialized view update.
 ### Cleanup Behavior
 ```
 # When immediate_cleanup=false (default)
-Preserving temporary materialized view for downstream dependencies: my_model_tmp_20231201_143022_123456
-Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS my_model_tmp_20231201_143022_123456;
+Preserving temporary materialized view for downstream dependencies: my_model_dbt_zero_down_tmp_20231201_143022_123456
+Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS my_model_dbt_zero_down_tmp_20231201_143022_123456;
 
 # When immediate_cleanup=true
-Immediately cleaning up temporary materialized view: my_model_tmp_20231201_143022_123456
+Immediately cleaning up temporary materialized view: my_model_dbt_zero_down_tmp_20231201_143022_123456
 ```
 
 ## Error Handling

@@ -285,7 +285,7 @@
     JOIN rw_schemas ON schema_id = rw_schemas.id
     WHERE rw_schemas.name NOT IN ('rw_catalog', 'information_schema', 'pg_catalog')
       AND relation_type = 'materialized view'
-      AND rw_relations.name LIKE '%_tmp_%'
+      AND rw_relations.name LIKE '%_dbt_zero_down_tmp_%'
       {{ schema_filter }}
     ORDER BY rw_schemas.name, rw_relations.name
   {%- endcall %}
