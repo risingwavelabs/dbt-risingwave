@@ -34,18 +34,16 @@
     {{ create_indexes(target_relation) }}
   {% else %}
     {# MV exists and not in full refresh mode #}
-    {%- set configuration_changes = get_materialized_view_configuration_changes(old_relation, config) -%}
-    
-    {% if configuration_changes is not none and zero_downtime_mode %}
-      {# There are SQL changes, use zero downtime rebuild #}
-      {{- log("Detected changes to materialized view definition. Using zero downtime rebuild with SWAP.") -}}
+    {% if zero_downtime_mode %}
+      {# Use zero downtime rebuild #}
+      {{- log("Using zero downtime rebuild with SWAP for materialized view update.") -}}
       {% call statement('main') -%}
         {{ risingwave__zero_downtime_materialized_view_rebuild(old_relation, target_relation, sql) }}
       {%- endcall %}
       
       {{ create_indexes(target_relation) }}
     {% else %}
-      {# No changes or zero_downtime disabled, use existing configuration change handling #}
+      {# Zero downtime disabled, use existing configuration change handling #}
       {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
     {% endif %}
   {% endif %}
