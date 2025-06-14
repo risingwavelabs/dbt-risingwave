@@ -266,30 +266,5 @@
 {%- endmacro %}
 
 {%- macro risingwave__swap_materialized_views(old_relation, new_relation) -%}
-  alter materialized view {{ old_relation }} swap with {{ new_relation }}
-{%- endmacro %}
-
-{%- macro risingwave__zero_downtime_materialized_view_rebuild(old_relation, target_relation, sql) -%}
-  {%- set temp_suffix = modules.datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f") -%}
-  {%- set temp_identifier = target_relation.identifier ~ "_tmp_" ~ temp_suffix -%}
-  {%- set temp_relation = api.Relation.create(
-      identifier=temp_identifier,
-      schema=target_relation.schema,
-      database=target_relation.database,
-      type='materialized_view'
-  ) -%}
-
-  {%- call statement('create_temp_mv') -%}
-    {{ risingwave__create_materialized_view_with_temp_name(temp_relation, sql) }}
-  {%- endcall %}
-
-  {%- call statement('swap_mv') -%}
-    {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
-  {%- endcall %}
-
-  {%- call statement('drop_old_mv') -%}
-    drop materialized view if exists {{ temp_relation }} cascade
-  {%- endcall %}
-
-  {{ return(temp_relation) }}
+  alter materialized view {{ old_relation }} swap {{ new_relation }}
 {%- endmacro %}
