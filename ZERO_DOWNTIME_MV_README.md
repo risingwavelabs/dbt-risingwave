@@ -4,6 +4,10 @@
 
 This feature enables zero downtime rebuilds of Materialized Views (MVs) by leveraging RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax for seamless transitions during model updates.
 
+## Requirements
+
+**⚠️ RisingWave Version Requirement**: This feature requires **RisingWave v2.2 or later**. The `ALTER MATERIALIZED VIEW SWAP` syntax is only available starting from RisingWave v2.2. Using this feature with earlier versions will result in SQL syntax errors.
+
 ## How It Works
 
 When a Materialized View definition changes, instead of dropping and recreating the MV (which causes downtime), this feature follows a three-step process:
@@ -318,7 +322,7 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 
 ### Core Limitations
 
-- **RisingWave Version Requirement**: Requires RisingWave support for `ALTER MATERIALIZED VIEW SWAP` syntax
+- **RisingWave Version Requirement**: Requires **RisingWave v2.2 or later** for `ALTER MATERIALIZED VIEW SWAP` syntax support
 - **Materialization Compatibility**: Only applicable to `materialized_view` and `materializedview` materializations
 - **Full Refresh Incompatibility**: Not compatible with full refresh operations (`--full-refresh`)
 - **Storage Requirements**: Requires additional storage capacity during rebuild process
@@ -397,6 +401,6 @@ dbt run-operation cleanup_temp_mvs --args '{"execute": true}'  # Execute cleanup
 
 ## Additional Notes
 
-- This feature is designed to work with RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax, which is not supported in all versions of RisingWave.
-- Ensure that your RisingWave version supports the necessary syntax for this feature to work.
-- If you encounter issues with this feature, please check the RisingWave documentation for any version-specific limitations or requirements. 
+- This feature is designed to work with RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax, which is only supported in **RisingWave v2.2 and later**.
+- Ensure that your RisingWave version is v2.2 or higher for this feature to work properly.
+- If you encounter issues with this feature on earlier versions, please upgrade to RisingWave v2.2+ or disable the zero downtime feature by removing `zero_downtime=true` from your model configuration. 

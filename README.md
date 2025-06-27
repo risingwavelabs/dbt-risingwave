@@ -47,8 +47,8 @@ The dbt models for managing data transformations in RisingWave are similar to ty
 
 | Materializations      | INFO                   |
 | ---------------------- | --------------------- |
-| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files. **NEW: Supports zero downtime rebuilds using ALTER MATERIALIZED VIEW SWAP syntax when explicitly enabled with {{ config(zero_downtime=true) }}.**                      |
-| materializedview       | (Deprecated) only for backward compatibility, use `materialized_view` instead. **Also supports zero downtime rebuilds when explicitly enabled.**                      |
+| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files. **NEW: Supports zero downtime rebuilds using ALTER MATERIALIZED VIEW SWAP syntax when explicitly enabled with {{ config(zero_downtime=true) }} (requires RisingWave v2.2+).**                      |
+| materializedview       | (Deprecated) only for backward compatibility, use `materialized_view` instead. **Also supports zero downtime rebuilds when explicitly enabled (requires RisingWave v2.2+).**                      |
 | ephemeral              | This materialization uses common table expressions in RisingWave under the hood. To use this materialization, add {{ config(materialized='ephemeral') }} to your model SQL files.                      |
 | table                  | Create a table. To use this materialization, add {{ config(materialized='table') }} to your model SQL files. |
 | view                   | Create a view. To use this materialization, add {{ config(materialized='view') }} to your model SQL files. |
@@ -64,6 +64,7 @@ To learn how to use, you can check RisingWave's official example [dbt_rw_nexmark
 **NEW FEATURE**: dbt-risingwave now supports zero downtime rebuilds for materialized views when SQL definitions change. This feature:
 
 - Uses RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax for atomic updates
+- **Requires RisingWave v2.2 or later** - the `ALTER MATERIALIZED VIEW SWAP` syntax is only available in RisingWave v2.2+
 - **Disabled by default** - must be explicitly enabled with `{{ config(zero_downtime=true) }}`
 - Maintains service availability during model updates when enabled
 - Provides a safe opt-in approach for production environments
