@@ -39,7 +39,7 @@
       {# Use zero downtime rebuild #}
       {{- log("Using zero downtime rebuild with SWAP for materialized view update.") -}}
       
-      {%- set temp_suffix = modules.datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f") -%}
+      {%- set temp_suffix = modules.datetime.datetime.now(modules.pytz.timezone('UTC')).isoformat().replace('-', '').replace(':', '').replace('.', '_') -%}
       {%- set temp_identifier = target_relation.identifier ~ "_dbt_zero_down_tmp_" ~ temp_suffix -%}
       {%- set temp_relation = api.Relation.create(
           identifier=temp_identifier,
