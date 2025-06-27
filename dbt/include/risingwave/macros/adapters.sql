@@ -295,7 +295,6 @@
 
 {%- macro risingwave__cleanup_temp_materialized_views(schema_name=none, older_than_hours=24, dry_run=true) -%}
   {%- set temp_mvs = risingwave__list_temp_materialized_views(schema_name) -%}
-  {%- set cleaned_count = 0 -%}
   
   {% if temp_mvs %}
     {{ print("Found " ~ temp_mvs | length ~ " temporary materialized views") }}
@@ -315,12 +314,11 @@
         {% call statement('drop_temp_mv_' ~ loop.index) -%}
           DROP MATERIALIZED VIEW IF EXISTS {{ mv_relation }} CASCADE
         {%- endcall %}
-        {%- set cleaned_count = cleaned_count + 1 -%}
       {% endif %}
     {% endfor %}
     
     {% if not dry_run %}
-      {{ print("Cleaned up " ~ cleaned_count ~ " temporary materialized views") }}
+      {{ print("Finished cleaning up temporary materialized views") }}
     {% endif %}
   {% else %}
     {{ print("No temporary materialized views found") }}
