@@ -47,7 +47,7 @@ The dbt models for managing data transformations in RisingWave are similar to ty
 
 | Materializations      | INFO                   |
 | ---------------------- | --------------------- |
-| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files. **NEW: Supports zero downtime rebuilds using ALTER MATERIALIZED VIEW SWAP syntax when explicitly enabled with {{ config(zero_downtime={'enabled': true}) }} (requires RisingWave v2.2+).**                      |
+| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files. **NEW: Supports zero downtime rebuilds using ALTER MATERIALIZED VIEW SWAP syntax when both model config has zero_downtime={'enabled': true} AND --vars 'zero_downtime: true' is provided (requires RisingWave v2.2+).**                      |
 | materializedview       | (Deprecated) only for backward compatibility, use `materialized_view` instead. **Zero downtime rebuilds are not supported - please migrate to `materialized_view` to use this feature.**                      |
 | ephemeral              | This materialization uses common table expressions in RisingWave under the hood. To use this materialization, add {{ config(materialized='ephemeral') }} to your model SQL files.                      |
 | table                  | Create a table. To use this materialization, add {{ config(materialized='table') }} to your model SQL files. |
@@ -65,9 +65,9 @@ To learn how to use, you can check RisingWave's official example [dbt_rw_nexmark
 
 - Uses RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax for atomic updates
 - **Requires RisingWave v2.2 or later** - the `ALTER MATERIALIZED VIEW SWAP` syntax is only available in RisingWave v2.2+
-- **Disabled by default** - must be explicitly enabled with `{{ config(zero_downtime=true) }}`
+- **Dual-layer safety** - requires both model config `zero_downtime={'enabled': true}` AND runtime flag `--vars 'zero_downtime: true'`
 - Maintains service availability during model updates when enabled
-- Provides a safe opt-in approach for production environments
+- Provides runtime control over when zero downtime rebuilds are used
 
 For detailed documentation, see [ZERO_DOWNTIME_MV_README.md](ZERO_DOWNTIME_MV_README.md).
 

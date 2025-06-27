@@ -9,8 +9,11 @@
                                                 database=database,
                                                 type='materialized_view') -%}
 
+  {# Check both model config AND command line flag for zero downtime #}
   {%- set zero_downtime_config = config.get('zero_downtime', {}) -%}
-  {%- set zero_downtime_mode = zero_downtime_config.get('enabled', false) -%}
+  {%- set model_has_zero_downtime = zero_downtime_config.get('enabled', false) -%}
+  {%- set user_requested_zero_downtime = var('zero_downtime', false) -%}
+  {%- set zero_downtime_mode = model_has_zero_downtime and user_requested_zero_downtime -%}
   {%- set immediate_cleanup = zero_downtime_config.get('immediate_cleanup', false) -%}
 
   {% if full_refresh_mode and old_relation %}
@@ -37,7 +40,7 @@
   {% else %}
     {# MV exists and not in full refresh mode #}
     {% if zero_downtime_mode %}
-      {# Use zero downtime rebuild #}
+      {# Use zero downtime rebuild - both model config and user flag are enabled #}
       {{- log("Using zero downtime rebuild with SWAP for materialized view update.") -}}
       
       {%- set temp_suffix = modules.datetime.datetime.now(modules.pytz.timezone('UTC')).isoformat().replace('-', '').replace(':', '').replace('.', '_') -%}
@@ -72,7 +75,10 @@
       
       {{ create_indexes(target_relation) }}
     {% else %}
-      {# Zero downtime disabled, use existing configuration change handling #}
+      {# Zero downtime disabled - either model config or user flag is missing #}
+      {% if model_has_zero_downtime and not user_requested_zero_downtime %}
+        {{- log("Model is configured for zero downtime, but --vars 'zero_downtime: true' was not provided. Using traditional rebuild.") -}}
+      {% endif %}
       {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
     {% endif %}
   {% endif %}

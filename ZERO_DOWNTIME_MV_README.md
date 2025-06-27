@@ -24,7 +24,14 @@ This ensures the original MV name remains available throughout the entire proces
 
 ### Enabling Zero Downtime Rebuilds
 
-Zero downtime rebuilds are **disabled by default** and must be explicitly enabled. To use this feature, add the configuration to your model:
+Zero downtime rebuilds require **two conditions** to be met:
+
+1. **Model Configuration**: The model must be configured for zero downtime
+2. **Runtime Flag**: The user must run dbt with `--vars 'zero_downtime: true'`
+
+#### Step 1: Configure Your Model
+
+Add zero downtime configuration to your model:
 
 ```sql
 -- models/my_model.sql
@@ -41,9 +48,21 @@ SELECT
 FROM {{ ref('source_table') }}
 ```
 
+#### Step 2: Run with Zero Downtime Flag
+
+```bash
+# Enable zero downtime rebuild for configured models
+dbt run --vars 'zero_downtime: true'
+
+# Or target specific models
+dbt run --models my_model --vars 'zero_downtime: true'
+```
+
+**Safety Note**: If you run `dbt run` without the `--vars 'zero_downtime: true'` flag, even models configured for zero downtime will use traditional rebuilds. This provides runtime control over when zero downtime rebuilds are used.
+
 ### Configuring Cleanup Behavior
 
-By default, temporary MVs are **preserved** to avoid affecting downstream dependencies. You can control cleanup behavior:
+By default, temporary MVs are **preserved** to avoid affecting downstream dependencies. You can control cleanup behavior in the model configuration:
 
 ```sql
 -- Immediate cleanup (may affect downstream MVs)
@@ -57,18 +76,28 @@ By default, temporary MVs are **preserved** to avoid affecting downstream depend
     materialized='materialized_view',
     zero_downtime={'enabled': true, 'immediate_cleanup': false}
 ) }}
+
+-- Or simply (immediate_cleanup defaults to false)
+{{ config(
+    materialized='materialized_view',
+    zero_downtime={'enabled': true}
+) }}
 ```
 
-### Default Behavior (Zero Downtime Disabled)
+Then run with the zero downtime flag:
 
-By default, zero downtime functionality is disabled and uses traditional configuration change handling:
-
-```sql
--- models/my_model.sql
-{{ config(materialized='materialized_view') }}
-
-SELECT * FROM {{ ref('source_table') }}
+```bash
+dbt run --vars 'zero_downtime: true'
 ```
+
+### Different Behaviors Based on Configuration
+
+| Model Config | Runtime Flag | Behavior |
+|-------------|-------------|----------|
+| `zero_downtime={'enabled': true}` | `--vars 'zero_downtime: true'` | **Zero downtime rebuild** |
+| `zero_downtime={'enabled': true}` | No flag | **Traditional rebuild** (with helpful log message) |
+| No zero downtime config | `--vars 'zero_downtime: true'` | **Traditional rebuild** |
+| No zero downtime config | No flag | **Traditional rebuild** |
 
 ## Temporary MV Management
 
@@ -122,20 +151,21 @@ dbt run-operation risingwave__cleanup_temp_materialized_views --args '{"dry_run"
 
 ## When Zero Downtime Rebuilds Trigger
 
-Zero downtime rebuilds are triggered in the following scenarios (only when `zero_downtime={'enabled': true}`):
+Zero downtime rebuilds are triggered when **ALL** of the following conditions are met:
 
 1. **Existing MV**: A Materialized View must already exist
 2. **Non-full-refresh Mode**: Only applies when not using `--full-refresh`
-3. **Explicitly Enabled**: Must have `zero_downtime={'enabled': true}` configured
+3. **Model Configuration**: Model must have `zero_downtime={'enabled': true}` in config
+4. **Runtime Flag**: Must be run with `--vars 'zero_downtime: true'`
 
 ## When Traditional Handling Is Used
 
 The following scenarios will use traditional configuration change handling:
 
-1. **Default Behavior**: When `zero_downtime={'enabled': true}` is not set (default)
-2. **Full Refresh Mode**: When using the `--full-refresh` parameter
-3. **Initial Creation**: When the MV doesn't exist (first-time creation)
-4. **Explicitly Disabled**: When `zero_downtime={'enabled': false}` is set
+1. **Missing Model Config**: When model doesn't have `zero_downtime={'enabled': true}`
+2. **Missing Runtime Flag**: When `--vars 'zero_downtime: true'` is not provided
+3. **Full Refresh Mode**: When using the `--full-refresh` parameter
+4. **Initial Creation**: When the MV doesn't exist (first-time creation)
 
 ## Technical Details
 
@@ -218,6 +248,7 @@ If errors occur during the zero downtime rebuild process:
 ### Scenario 1: Safe Zero Downtime Rebuild (Recommended)
 
 ```sql
+-- models/users_model.sql
 -- Safe approach: preserve downstream dependencies
 {{ config(
     materialized='materialized_view',
@@ -227,11 +258,17 @@ If errors occur during the zero downtime rebuild process:
 SELECT id, name, email FROM users
 ```
 
+Run with:
+```bash
+dbt run --models users_model --vars 'zero_downtime: true'
+```
+
 This preserves temporary MVs to protect downstream dependencies. Clean up manually when safe.
 
 ### Scenario 2: Immediate Cleanup (Use with Caution)
 
 ```sql
+-- models/users_model.sql
 -- Immediate cleanup: may affect downstream MVs
 {{ config(
     materialized='materialized_view',
@@ -241,27 +278,36 @@ This preserves temporary MVs to protect downstream dependencies. Clean up manual
 SELECT id, name, email FROM users
 ```
 
+Run with:
+```bash
+dbt run --models users_model --vars 'zero_downtime: true'
+```
+
 This immediately cleans up temporary MVs but may affect downstream dependencies.
 
-## Best Practices
+### Scenario 3: Runtime Control
 
-1. **Use Default Cleanup Strategy**: Keep `zero_downtime_immediate_cleanup=false` to protect downstream dependencies
-2. **Regular Cleanup**: Schedule periodic cleanup of temporary MVs using the provided utilities
-3. **Monitor Storage**: Track storage usage as temporary MVs accumulate
-4. **Test Dependencies**: Verify downstream MV behavior before enabling immediate cleanup
-5. **Cleanup Automation**: Consider automating temporary MV cleanup in your deployment pipeline
-6. **Resource Planning**: Ensure cluster has sufficient capacity for doubled resource usage during rebuilds
-7. **Sink Management**: 
-   - **Document Sink Dependencies**: Maintain documentation of which MVs have downstream Sinks
-   - **Plan Sink Updates**: Prepare Sink update procedures before MV rebuilds
-   - **Test Sink Compatibility**: Verify Sink behavior with new MV schemas in non-production environments
-   - **Consider Maintenance Windows**: Schedule MV rebuilds with Sinks during low-impact periods
-8. **Monitoring and Alerting**:
-   - Set up alerts for temporary MV accumulation
-   - Monitor cluster resource usage during rebuilds
-   - Track rebuild success/failure rates
-9. **Staged Rollouts**: Test zero downtime rebuilds on smaller, less critical MVs first
-10. **Documentation**: Keep team documentation updated with zero downtime procedures and Sink update workflows
+```sql
+-- models/users_model.sql
+-- Model is configured for zero downtime but won't use it unless flag is provided
+{{ config(
+    materialized='materialized_view',
+    zero_downtime={'enabled': true}
+) }}
+
+SELECT id, name, email FROM users
+```
+
+```bash
+# Traditional rebuild (even though model is configured for zero downtime)
+dbt run --models users_model
+
+# Zero downtime rebuild
+dbt run --models users_model --vars 'zero_downtime: true'
+```
+
+This allows the same model to be deployed differently based on the situation.
+
 
 ## Cleanup Workflow
 
@@ -282,49 +328,44 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 {{ risingwave__cleanup_temp_materialized_views(dry_run=false) }}
 ```
 
-## Troubleshooting
 
-### Common Issues
-
-1. **Accumulating Temporary MVs**: Set up regular cleanup processes
-2. **Storage Growth**: Monitor disk usage and clean up temporary MVs regularly
-3. **Permission Issues**: Ensure the dbt user has CREATE, DROP, and ALTER permissions for MVs
-4. **Downstream MV Failures**: Check if immediate cleanup is affecting dependent MVs
-5. **Sink Connection Issues**: Verify that downstream Sinks are properly updated after MV rebuilds
-6. **Resource Exhaustion**: Monitor cluster resources during rebuilds, especially for large MVs
-7. **Schema Mismatch**: Ensure Sink schemas are compatible with rebuilt MV schemas
-
-### Debugging Tips
-
-1. Enable verbose logging: `dbt run --log-level debug`
-2. Check RisingWave logs for detailed SWAP operation information
-3. Use `dbt ls` command to verify model states
-4. Monitor for orphaned temporary MVs in your RisingWave instance
-5. Use the provided utilities to inspect and manage temporary MVs
-6. **Sink Debugging**:
-   - Check Sink status after MV rebuilds: `SHOW SINKS;`
-   - Verify Sink schema compatibility with new MV schema
-   - Monitor Sink error logs for schema-related issues
-7. **Resource Monitoring**:
-   - Monitor cluster memory usage during rebuilds
-   - Check for resource constraints in RisingWave logs
-   - Track CPU and storage utilization patterns
 
 ## Configuration Reference
 
+### Model Configuration Options
+
 | Config Option | Default | Description |
 |---------------|---------|-------------|
-| `zero_downtime` | `{}` | Dictionary configuration for zero downtime rebuilds |
-| `zero_downtime.enabled` | `false` | Enables zero downtime rebuilds when set to `true` |
+| `zero_downtime.enabled` | `false` | Enables the model for zero downtime rebuilds when set to `true` |
 | `zero_downtime.immediate_cleanup` | `false` | Controls whether temporary MVs are immediately dropped after swap |
 
-### Configuration Format
+### Runtime Variable
+
+| Variable Option | Default | Description |
+|---------------|---------|-------------|
+| `zero_downtime` | `false` | Runtime flag to trigger zero downtime rebuilds for configured models |
+
+### Model Configuration Format
 
 ```sql
+-- Minimal zero downtime configuration
 {{ config(
     materialized='materialized_view',
-    zero_downtime={'enabled': true, 'immediate_cleanup': false}
+    zero_downtime={'enabled': true}
 ) }}
+
+-- With immediate cleanup
+{{ config(
+    materialized='materialized_view',
+    zero_downtime={'enabled': true, 'immediate_cleanup': true}
+) }}
+```
+
+### Command Line Usage
+
+```bash
+# Enable zero downtime for models configured with zero_downtime={'enabled': true}
+dbt run --vars 'zero_downtime: true'
 ```
 
 ## Limitations
