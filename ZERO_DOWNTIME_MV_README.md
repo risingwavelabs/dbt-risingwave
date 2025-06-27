@@ -8,6 +8,8 @@ This feature enables zero downtime rebuilds of Materialized Views (MVs) by lever
 
 **⚠️ RisingWave Version Requirement**: This feature requires **RisingWave v2.2 or later**. The `ALTER MATERIALIZED VIEW SWAP` syntax is only available starting from RisingWave v2.2. Using this feature with earlier versions will result in SQL syntax errors.
 
+**⚠️ Materialization Requirement**: This feature is only available for the `materialized_view` materialization. The deprecated `materializedview` materialization does not support zero downtime rebuilds. If you are using `materializedview`, please migrate to `materialized_view` to access this feature.
+
 ## How It Works
 
 When a Materialized View definition changes, instead of dropping and recreating the MV (which causes downtime), this feature follows a three-step process:
@@ -323,7 +325,7 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 ### Core Limitations
 
 - **RisingWave Version Requirement**: Requires **RisingWave v2.2 or later** for `ALTER MATERIALIZED VIEW SWAP` syntax support
-- **Materialization Compatibility**: Only applicable to `materialized_view` and `materializedview` materializations
+- **Materialization Compatibility**: Only applicable to `materialized_view` materialization (not available for the deprecated `materializedview` materialization)
 - **Full Refresh Incompatibility**: Not compatible with full refresh operations (`--full-refresh`)
 - **Storage Requirements**: Requires additional storage capacity during rebuild process
 
