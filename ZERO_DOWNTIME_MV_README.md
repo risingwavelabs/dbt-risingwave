@@ -30,7 +30,7 @@ Zero downtime rebuilds are **disabled by default** and must be explicitly enable
 -- models/my_model.sql
 {{ config(
     materialized='materialized_view',
-    zero_downtime=true
+    zero_downtime={'enabled': true}
 ) }}
 
 SELECT 
@@ -49,15 +49,13 @@ By default, temporary MVs are **preserved** to avoid affecting downstream depend
 -- Immediate cleanup (may affect downstream MVs)
 {{ config(
     materialized='materialized_view',
-    zero_downtime=true,
-    zero_downtime_immediate_cleanup=true
+    zero_downtime={'enabled': true, 'immediate_cleanup': true}
 ) }}
 
 -- Deferred cleanup (default, preserves downstream dependencies)
 {{ config(
     materialized='materialized_view',
-    zero_downtime=true,
-    zero_downtime_immediate_cleanup=false
+    zero_downtime={'enabled': true, 'immediate_cleanup': false}
 ) }}
 ```
 
@@ -124,20 +122,20 @@ dbt run-operation risingwave__cleanup_temp_materialized_views --args '{"dry_run"
 
 ## When Zero Downtime Rebuilds Trigger
 
-Zero downtime rebuilds are triggered in the following scenarios (only when `zero_downtime=true`):
+Zero downtime rebuilds are triggered in the following scenarios (only when `zero_downtime={'enabled': true}`):
 
 1. **Existing MV**: A Materialized View must already exist
 2. **Non-full-refresh Mode**: Only applies when not using `--full-refresh`
-3. **Explicitly Enabled**: Must have `zero_downtime=true` configured
+3. **Explicitly Enabled**: Must have `zero_downtime={'enabled': true}` configured
 
 ## When Traditional Handling Is Used
 
 The following scenarios will use traditional configuration change handling:
 
-1. **Default Behavior**: When `zero_downtime=true` is not set (default)
+1. **Default Behavior**: When `zero_downtime={'enabled': true}` is not set (default)
 2. **Full Refresh Mode**: When using the `--full-refresh` parameter
 3. **Initial Creation**: When the MV doesn't exist (first-time creation)
-4. **Explicitly Disabled**: When `zero_downtime=false` is set
+4. **Explicitly Disabled**: When `zero_downtime={'enabled': false}` is set
 
 ## Technical Details
 
@@ -223,7 +221,7 @@ If errors occur during the zero downtime rebuild process:
 -- Safe approach: preserve downstream dependencies
 {{ config(
     materialized='materialized_view',
-    zero_downtime=true
+    zero_downtime={'enabled': true}
 ) }}
 
 SELECT id, name, email FROM users
@@ -237,8 +235,7 @@ This preserves temporary MVs to protect downstream dependencies. Clean up manual
 -- Immediate cleanup: may affect downstream MVs
 {{ config(
     materialized='materialized_view',
-    zero_downtime=true,
-    zero_downtime_immediate_cleanup=true
+    zero_downtime={'enabled': true, 'immediate_cleanup': true}
 ) }}
 
 SELECT id, name, email FROM users
@@ -317,8 +314,18 @@ This immediately cleans up temporary MVs but may affect downstream dependencies.
 
 | Config Option | Default | Description |
 |---------------|---------|-------------|
-| `zero_downtime` | `false` | Enables zero downtime rebuilds when set to `true` |
-| `zero_downtime_immediate_cleanup` | `false` | Controls whether temporary MVs are immediately dropped after swap |
+| `zero_downtime` | `{}` | Dictionary configuration for zero downtime rebuilds |
+| `zero_downtime.enabled` | `false` | Enables zero downtime rebuilds when set to `true` |
+| `zero_downtime.immediate_cleanup` | `false` | Controls whether temporary MVs are immediately dropped after swap |
+
+### Configuration Format
+
+```sql
+{{ config(
+    materialized='materialized_view',
+    zero_downtime={'enabled': true, 'immediate_cleanup': false}
+) }}
+```
 
 ## Limitations
 

@@ -9,8 +9,9 @@
                                                 database=database,
                                                 type='materialized_view') -%}
 
-  {%- set zero_downtime_mode = config.get('zero_downtime', false) -%}
-  {%- set immediate_cleanup = config.get('zero_downtime_immediate_cleanup', false) -%}
+  {%- set zero_downtime_config = config.get('zero_downtime', {}) -%}
+  {%- set zero_downtime_mode = zero_downtime_config.get('enabled', false) -%}
+  {%- set immediate_cleanup = zero_downtime_config.get('immediate_cleanup', false) -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
