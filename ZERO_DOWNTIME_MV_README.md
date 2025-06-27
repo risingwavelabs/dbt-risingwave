@@ -94,16 +94,16 @@ dbt run-operation list_temp_mvs --args '{"schema_name": "public"}'
 
 ```bash
 # Dry run - see what would be cleaned up (safe to run)
-dbt run-operation cleanup_temp_mvs
+dbt run-operation cleanup_temp_mvs --args '{"dry": true}'
 
 # Dry run for specific schema
-dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public"}'
+dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public", "dry": true}'
 
 # Actually clean up temporary MVs (caution: this will drop MVs)
-dbt run-operation cleanup_temp_mvs --args '{"execute": true}'
+dbt run-operation cleanup_temp_mvs
 
 # Clean up temporary MVs in specific schema
-dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public", "execute": true}'
+dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public"}'
 ```
 
 **Note**: These commands will display output directly to the console without requiring special log level settings.
@@ -391,8 +391,8 @@ CREATE SINK user_sink FROM user_stats WITH (...);
 ```bash
 # Regular cleanup is essential - run these commands periodically:
 dbt run-operation list_temp_mvs                    # Check for temporary MVs
-dbt run-operation cleanup_temp_mvs                 # Preview cleanup (dry run)
-dbt run-operation cleanup_temp_mvs --args '{"execute": true}'  # Execute cleanup
+dbt run-operation cleanup_temp_mvs --args '{"dry": true}'  # Preview cleanup (dry run)
+dbt run-operation cleanup_temp_mvs                 # Execute cleanup
 ```
 
 **Monitoring Requirements**:

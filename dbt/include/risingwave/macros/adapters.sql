@@ -351,25 +351,25 @@
   {{ print("") }}
 {%- endmacro %}
 
-{%- macro cleanup_temp_mvs(schema_name=none, execute=false) -%}
+{%- macro cleanup_temp_mvs(schema_name=none, dry=false) -%}
   {{ print("=== Temporary Materialized Views Cleanup ===") }}
   {%- if schema_name -%}
     {{ print("Schema: " ~ schema_name) }}
   {%- else -%}
     {{ print("Schema: All schemas") }}
   {%- endif -%}
-  {{ print("Mode: " ~ ("EXECUTE" if execute else "DRY RUN")) }}
+  {{ print("Mode: " ~ ("DRY RUN" if dry else "EXECUTE")) }}
   {{ print("") }}
   
-  {{ risingwave__cleanup_temp_materialized_views(schema_name=schema_name, dry_run=(not execute)) }}
+  {{ risingwave__cleanup_temp_materialized_views(schema_name=schema_name, dry_run=dry) }}
   
-  {% if not execute %}
+  {% if dry %}
     {{ print("") }}
     {{ print("To actually clean up these temporary MVs, run:") }}
     {% if schema_name %}
-      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"schema_name": "' ~ schema_name ~ '", "execute": true}\'') }}
+      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"schema_name": "' ~ schema_name ~ '"}\'') }}
     {% else %}
-      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"execute": true}\'') }}
+      {{ print('dbt run-operation cleanup_temp_mvs') }}
     {% endif %}
   {% endif %}
 {%- endmacro %}
