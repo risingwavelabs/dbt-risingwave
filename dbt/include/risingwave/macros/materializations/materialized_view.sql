@@ -65,9 +65,7 @@
       {# Step 3: Conditionally drop the old materialized view (now with temp name) #}
       {% if immediate_cleanup %}
         {{- log("Immediately cleaning up temporary materialized view: " ~ temp_relation) -}}
-        {% call statement('drop_old_mv') -%}
-          drop materialized view if exists {{ temp_relation }} cascade
-        {%- endcall %}
+        {{ risingwave__drop_relation(temp_relation) }}
       {% else %}
         {{- log("Preserving temporary materialized view for downstream dependencies: " ~ temp_relation) -}}
         {{- log("Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS " ~ temp_relation ~ ";") -}}
