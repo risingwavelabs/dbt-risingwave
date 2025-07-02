@@ -16,14 +16,23 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {% if old_relation is none or (full_refresh_mode and old_relation) %}
+  {% if old_relation is none %}
+    {# First time creation #}
+    {% call statement('main') -%}
+      {{ risingwave__create_materialized_view_as(target_relation, sql) }}
+    {%- endcall %}
+
+    {{ create_indexes(target_relation) }}
+  {% elif full_refresh_mode and old_relation %}
+    {# Full refresh mode - already dropped above, create new #}
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
 
     {{ create_indexes(target_relation) }}
   {% else %}
-      {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
+    {# MV exists and not in full refresh mode - use existing configuration change handling #}
+    {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
   {% endif %}
 
   {% do persist_docs(target_relation, model) %}

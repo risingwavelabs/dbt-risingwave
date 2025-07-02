@@ -251,3 +251,123 @@
     delete from {{ relation }}
   {%- endcall %}
 {% endmacro %}
+
+{%- macro risingwave__create_materialized_view_with_temp_name(temp_relation, sql) -%}
+    {%- set sql_header = config.get("sql_header", none) -%}
+    {{ sql_header if sql_header is not none }}
+
+  create materialized view {{ temp_relation }}
+    {% set contract_config = config.get('contract') %}
+    {% if contract_config.enforced %}
+      {{ get_assert_columns_equivalent(sql) }}
+    {%- endif %}
+  as {{ sql }}
+  ;
+{%- endmacro %}
+
+{%- macro risingwave__swap_materialized_views(old_relation, new_relation) -%}
+  alter materialized view {{ old_relation }} swap with {{ new_relation }}
+{%- endmacro %}
+
+{%- macro risingwave__list_temp_materialized_views(schema_name=none) -%}
+  {%- if schema_name -%}
+    {%- set schema_filter = "AND rw_schemas.name = '" ~ schema_name ~ "'" -%}
+  {%- else -%}
+    {%- set schema_filter = "" -%}
+  {%- endif -%}
+
+  {% call statement('list_temp_mvs', fetch_result=True) -%}
+    SELECT 
+      rw_schemas.name as schema_name,
+      rw_relations.name as mv_name,
+      rw_relations.id as mv_id
+    FROM rw_relations 
+    JOIN rw_schemas ON schema_id = rw_schemas.id
+    WHERE rw_schemas.name NOT IN ('rw_catalog', 'information_schema', 'pg_catalog')
+      AND relation_type = 'materialized view'
+      AND rw_relations.name LIKE '%_dbt_zero_down_tmp_%'
+      {{ schema_filter }}
+    ORDER BY rw_schemas.name, rw_relations.name
+  {%- endcall %}
+
+  {{ return(load_result('list_temp_mvs').table) }}
+{%- endmacro %}
+
+{%- macro risingwave__cleanup_temp_materialized_views(schema_name=none, older_than_hours=24, dry_run=true) -%}
+  {%- set temp_mvs = risingwave__list_temp_materialized_views(schema_name) -%}
+  
+  {% if temp_mvs %}
+    {{ print("Found " ~ temp_mvs | length ~ " temporary materialized views") }}
+    
+    {% for temp_mv in temp_mvs %}
+      {%- set mv_relation = api.Relation.create(
+          identifier=temp_mv[1],
+          schema=temp_mv[0],
+          database=database,
+          type='materialized_view'
+      ) -%}
+      
+      {% if dry_run %}
+        {{ print("DRY RUN: Would drop " ~ mv_relation) }}
+      {% else %}
+        {{ print("Dropping temporary materialized view: " ~ mv_relation) }}
+        {% call statement('drop_temp_mv_' ~ loop.index) -%}
+          DROP MATERIALIZED VIEW IF EXISTS {{ mv_relation }} CASCADE
+        {%- endcall %}
+      {% endif %}
+    {% endfor %}
+    
+    {% if not dry_run %}
+      {{ print("Finished cleaning up temporary materialized views") }}
+    {% endif %}
+  {% else %}
+    {{ print("No temporary materialized views found") }}
+  {% endif %}
+{%- endmacro %}
+
+{#-- User-friendly wrapper macros for dbt run-operation --#}
+
+{%- macro list_temp_mvs(schema_name=none) -%}
+  {{ print("=== Listing Temporary Materialized Views ===") }}
+  {%- if schema_name -%}
+    {{ print("Schema: " ~ schema_name) }}
+  {%- else -%}
+    {{ print("Schema: All schemas") }}
+  {%- endif -%}
+  {{ print("") }}
+  
+  {%- set temp_mvs = risingwave__list_temp_materialized_views(schema_name) -%}
+  
+  {% if temp_mvs %}
+    {{ print("Found " ~ temp_mvs | length ~ " temporary materialized views:") }}
+    {% for temp_mv in temp_mvs %}
+      {{ print("  - " ~ temp_mv[0] ~ "." ~ temp_mv[1]) }}
+    {% endfor %}
+  {% else %}
+    {{ print("No temporary materialized views found.") }}
+  {% endif %}
+  {{ print("") }}
+{%- endmacro %}
+
+{%- macro cleanup_temp_mvs(schema_name=none, dry=false) -%}
+  {{ print("=== Temporary Materialized Views Cleanup ===") }}
+  {%- if schema_name -%}
+    {{ print("Schema: " ~ schema_name) }}
+  {%- else -%}
+    {{ print("Schema: All schemas") }}
+  {%- endif -%}
+  {{ print("Mode: " ~ ("DRY RUN" if dry else "EXECUTE")) }}
+  {{ print("") }}
+  
+  {{ risingwave__cleanup_temp_materialized_views(schema_name=schema_name, dry_run=dry) }}
+  
+  {% if dry %}
+    {{ print("") }}
+    {{ print("To actually clean up these temporary MVs, run:") }}
+    {% if schema_name %}
+      {{ print('dbt run-operation cleanup_temp_mvs --args \'{"schema_name": "' ~ schema_name ~ '"}\'') }}
+    {% else %}
+      {{ print('dbt run-operation cleanup_temp_mvs') }}
+    {% endif %}
+  {% endif %}
+{%- endmacro %}
