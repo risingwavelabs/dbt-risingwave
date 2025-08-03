@@ -211,14 +211,10 @@ The feature relies on several core macros for different materialization types:
 #### Materialized View Macros
 1. **`risingwave__create_materialized_view_with_temp_name`**: Generates SQL to create an MV with a temporary name
 2. **`risingwave__swap_materialized_views`**: Generates SQL for the MV swap operation
-3. **`risingwave__list_temp_materialized_views`**: Lists temporary MVs for cleanup management
-4. **`risingwave__cleanup_temp_materialized_views`**: Utility for cleaning up temporary MVs
 
 #### View Macros
 1. **`risingwave__create_view_with_temp_name`**: Generates SQL to create a view with a temporary name
 2. **`risingwave__swap_views`**: Generates SQL for the view swap operation
-3. **`risingwave__list_temp_views`**: Lists temporary views for cleanup management
-4. **`risingwave__cleanup_temp_views`**: Utility for cleaning up temporary views
 
 #### Unified Object Management Macros
 1. **`list_temp_objects`**: Lists all temporary zero downtime objects (MVs, views, future sinks)
