@@ -148,71 +148,29 @@ dbt run --vars 'zero_downtime: true'
 
 ### Managing Temporary Objects with dbt Commands
 
-#### Listing Temporary Objects
-
-**Materialized Views:**
+**Listing Temporary Objects:**
 ```bash
-# List all temporary MVs across all schemas
-dbt run-operation list_temp_mvs
+# List all temporary objects (MVs, views)
+dbt run-operation list_temp_objects
 
-# List temporary MVs in a specific schema
-dbt run-operation list_temp_mvs --args '{"schema_name": "public"}'
+# List temporary objects in a specific schema
+dbt run-operation list_temp_objects --args '{"schema_name": "public"}'
 ```
 
-**Views:**
-```bash
-# List all temporary views across all schemas
-dbt run-operation list_temp_views
-
-# List temporary views in a specific schema
-dbt run-operation list_temp_views --args '{"schema_name": "public"}'
-```
-
-#### Cleaning Up Temporary Objects
-
-**Materialized Views:**
+**Cleaning Up Temporary Objects:**
 ```bash
 # Dry run - see what would be cleaned up (safe to run)
-dbt run-operation cleanup_temp_mvs --args '{"dry": true}'
+dbt run-operation cleanup_temp_objects --args '{"dry": true}'
 
-# Dry run for specific schema
-dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public", "dry": true}'
+# Actually clean up temporary objects (caution: this will drop objects)
+dbt run-operation cleanup_temp_objects
 
-# Actually clean up temporary MVs (caution: this will drop MVs)
-dbt run-operation cleanup_temp_mvs
-
-# Clean up temporary MVs in specific schema
-dbt run-operation cleanup_temp_mvs --args '{"schema_name": "public"}'
-```
-
-**Views:**
-```bash
-# Dry run - see what would be cleaned up (safe to run)
-dbt run-operation cleanup_temp_views --args '{"dry": true}'
-
-# Dry run for specific schema
-dbt run-operation cleanup_temp_views --args '{"schema_name": "public", "dry": true}'
-
-# Actually clean up temporary views (caution: this will drop views)
-dbt run-operation cleanup_temp_views
-
-# Clean up temporary views in specific schema
-dbt run-operation cleanup_temp_views --args '{"schema_name": "public"}'
+# Clean up temporary objects in specific schema
+dbt run-operation cleanup_temp_objects --args '{"schema_name": "public"}'
 ```
 
 **Note**: These commands will display output directly to the console without requiring special log level settings.
 
-### Alternative: Using Internal Macros
-
-For advanced users, you can also call the internal macros directly:
-
-```bash
-# List temporary MVs (internal macro)
-dbt run-operation risingwave__list_temp_materialized_views
-
-# Cleanup with internal macro
-dbt run-operation risingwave__cleanup_temp_materialized_views --args '{"dry_run": false}'
-```
 
 ## When Zero Downtime Rebuilds Trigger
 
@@ -261,6 +219,10 @@ The feature relies on several core macros for different materialization types:
 2. **`risingwave__swap_views`**: Generates SQL for the view swap operation
 3. **`risingwave__list_temp_views`**: Lists temporary views for cleanup management
 4. **`risingwave__cleanup_temp_views`**: Utility for cleaning up temporary views
+
+#### Unified Object Management Macros
+1. **`list_temp_objects`**: Lists all temporary zero downtime objects (MVs, views, future sinks)
+2. **`cleanup_temp_objects`**: Cleanup utility for all temporary objects
 
 ### Execution Flow
 
@@ -409,19 +371,19 @@ This allows the same model to be deployed differently based on the situation.
 
 ### Recommended Cleanup Process
 
-1. **Complete Model Updates**: Finish updating all dependent MVs
-2. **Verify Dependencies**: Ensure all downstream MVs are functioning correctly
-3. **Clean Up Safely**: Use the cleanup utilities to remove temporary MVs
+1. **Complete Model Updates**: Finish updating all dependent models (MVs and views)
+2. **Verify Dependencies**: Ensure all downstream objects are functioning correctly
+3. **Clean Up Safely**: Use the unified cleanup utilities to remove temporary objects
 
-```sql
--- Step 1: List temporary MVs
-{{ risingwave__list_temp_materialized_views() }}
+```bash
+# Step 1: List all temporary objects
+dbt run-operation list_temp_objects
 
--- Step 2: Dry run cleanup
-{{ risingwave__cleanup_temp_materialized_views(dry_run=true) }}
+# Step 2: Dry run cleanup (see what would be cleaned up)
+dbt run-operation cleanup_temp_objects --args '{"dry": true}'
 
--- Step 3: Actual cleanup
-{{ risingwave__cleanup_temp_materialized_views(dry_run=false) }}
+# Step 3: Actual cleanup
+dbt run-operation cleanup_temp_objects
 ```
 
 
@@ -547,9 +509,9 @@ CREATE SINK user_sink FROM user_stats WITH (...);
 **Cleanup Responsibilities**:
 ```bash
 # Regular cleanup is essential - run these commands periodically:
-dbt run-operation list_temp_mvs                    # Check for temporary MVs
-dbt run-operation cleanup_temp_mvs --args '{"dry": true}'  # Preview cleanup (dry run)
-dbt run-operation cleanup_temp_mvs                 # Execute cleanup
+dbt run-operation list_temp_objects                           # Check for all temporary objects
+dbt run-operation cleanup_temp_objects --args '{"dry": true}' # Preview cleanup (dry run)
+dbt run-operation cleanup_temp_objects                        # Execute cleanup
 ```
 
 **Monitoring Requirements**:

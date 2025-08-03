@@ -489,3 +489,165 @@
     {% endif %}
   {% endif %}
 {%- endmacro %}
+
+{#-- Unified API for managing all temporary zero downtime objects --#}
+
+{%- macro risingwave__list_temp_objects(schema_name=none, object_types=none) -%}
+  {%- if schema_name -%}
+    {%- set schema_filter = "AND rw_schemas.name = '" ~ schema_name ~ "'" -%}
+  {%- else -%}
+    {%- set schema_filter = "" -%}
+  {%- endif -%}
+
+  {# Default to all supported object types if none specified #}
+  {%- if object_types is none -%}
+    {%- set object_types = ['materialized view', 'view'] -%}
+  {%- endif -%}
+  
+  {# Build the type filter #}
+  {%- set type_conditions = [] -%}
+  {%- for obj_type in object_types -%}
+    {%- do type_conditions.append("'" ~ obj_type ~ "'") -%}
+  {%- endfor -%}
+  {%- set type_filter = "AND relation_type IN (" ~ type_conditions | join(', ') ~ ")" -%}
+
+  {% call statement('list_temp_objects', fetch_result=True) -%}
+    SELECT 
+      rw_schemas.name as schema_name,
+      rw_relations.name as object_name,
+      rw_relations.id as object_id,
+      relation_type as object_type
+    FROM rw_relations 
+    JOIN rw_schemas ON schema_id = rw_schemas.id
+    WHERE rw_schemas.name NOT IN ('rw_catalog', 'information_schema', 'pg_catalog')
+      {{ type_filter }}
+      AND rw_relations.name LIKE '%_dbt_zero_down_tmp_%'
+      {{ schema_filter }}
+    ORDER BY rw_schemas.name, relation_type, rw_relations.name
+  {%- endcall %}
+
+  {{ return(load_result('list_temp_objects').table) }}
+{%- endmacro %}
+
+{%- macro risingwave__cleanup_temp_objects(schema_name=none, object_types=none, older_than_hours=24, dry_run=true) -%}
+  {%- set temp_objects = risingwave__list_temp_objects(schema_name, object_types) -%}
+  
+  {% if temp_objects %}
+    {{ print("Found " ~ temp_objects | length ~ " temporary objects") }}
+    
+    {% for temp_obj in temp_objects %}
+      {%- set obj_type_mapping = {
+          'materialized view': 'materialized_view',
+          'view': 'view',
+          'sink': 'sink'
+      } -%}
+      {%- set dbt_type = obj_type_mapping.get(temp_obj[3], temp_obj[3]) -%}
+      
+      {%- set obj_relation = api.Relation.create(
+          identifier=temp_obj[1],
+          schema=temp_obj[0],
+          database=database,
+          type=dbt_type
+      ) -%}
+      
+      {% if dry_run %}
+        {{ print("DRY RUN: Would drop " ~ temp_obj[3] ~ " " ~ obj_relation) }}
+      {% else %}
+        {{ print("Dropping temporary " ~ temp_obj[3] ~ ": " ~ obj_relation) }}
+        {% call statement('drop_temp_obj_' ~ loop.index) -%}
+          {% if temp_obj[3] == 'materialized view' %}
+            DROP MATERIALIZED VIEW IF EXISTS {{ obj_relation }} CASCADE
+          {% elif temp_obj[3] == 'view' %}
+            DROP VIEW IF EXISTS {{ obj_relation }} CASCADE
+          {% elif temp_obj[3] == 'sink' %}
+            DROP SINK IF EXISTS {{ obj_relation }} CASCADE
+          {% endif %}
+        {%- endcall %}
+      {% endif %}
+    {% endfor %}
+    
+    {% if not dry_run %}
+      {{ print("Finished cleaning up temporary objects") }}
+    {% endif %}
+  {% else %}
+    {{ print("No temporary objects found") }}
+  {% endif %}
+{%- endmacro %}
+
+{#-- User-friendly unified wrapper macros --#}
+
+{%- macro list_temp_objects(schema_name=none, object_types=none) -%}
+  {{ print("=== Listing Temporary Zero Downtime Objects ===") }}
+  {%- if schema_name -%}
+    {{ print("Schema: " ~ schema_name) }}
+  {%- else -%}
+    {{ print("Schema: All schemas") }}
+  {%- endif -%}
+  
+  {%- if object_types -%}
+    {{ print("Object Types: " ~ (object_types | join(', '))) }}
+  {%- else -%}
+    {{ print("Object Types: All supported types (materialized views, views)") }}
+  {%- endif -%}
+  {{ print("") }}
+  
+  {%- set temp_objects = risingwave__list_temp_objects(schema_name, object_types) -%}
+  
+  {% if temp_objects %}
+    {{ print("Found " ~ temp_objects | length ~ " temporary objects:") }}
+    
+    {# Group by object type for better readability #}
+    {%- set objects_by_type = {} -%}
+    {% for temp_obj in temp_objects %}
+      {%- set obj_type = temp_obj[3] -%}
+      {%- if obj_type not in objects_by_type -%}
+        {%- do objects_by_type.update({obj_type: []}) -%}
+      {%- endif -%}
+      {%- do objects_by_type[obj_type].append(temp_obj) -%}
+    {% endfor %}
+    
+    {% for obj_type, objects in objects_by_type.items() %}
+      {{ print("") }}
+      {{ print(obj_type | title ~ "s (" ~ objects | length ~ "):") }}
+      {% for obj in objects %}
+        {{ print("  - " ~ obj[0] ~ "." ~ obj[1]) }}
+      {% endfor %}
+    {% endfor %}
+  {% else %}
+    {{ print("No temporary objects found.") }}
+  {% endif %}
+  {{ print("") }}
+{%- endmacro %}
+
+{%- macro cleanup_temp_objects(schema_name=none, object_types=none, dry=false) -%}
+  {{ print("=== Temporary Zero Downtime Objects Cleanup ===") }}
+  {%- if schema_name -%}
+    {{ print("Schema: " ~ schema_name) }}
+  {%- else -%}
+    {{ print("Schema: All schemas") }}
+  {%- endif -%}
+  
+  {%- if object_types -%}
+    {{ print("Object Types: " ~ (object_types | join(', '))) }}
+  {%- else -%}
+    {{ print("Object Types: All supported types") }}
+  {%- endif -%}
+  {{ print("Mode: " ~ ("DRY RUN" if dry else "EXECUTE")) }}
+  {{ print("") }}
+  
+  {{ risingwave__cleanup_temp_objects(schema_name=schema_name, object_types=object_types, dry_run=dry) }}
+  
+  {% if dry %}
+    {{ print("") }}
+    {{ print("To actually clean up these temporary objects, run:") }}
+    {% if schema_name and object_types %}
+      {{ print('dbt run-operation cleanup_temp_objects --args \'{"schema_name": "' ~ schema_name ~ '", "object_types": ["' ~ (object_types | join('", "')) ~ '"]}\'') }}
+    {% elif schema_name %}
+      {{ print('dbt run-operation cleanup_temp_objects --args \'{"schema_name": "' ~ schema_name ~ '"}\'') }}
+    {% elif object_types %}
+      {{ print('dbt run-operation cleanup_temp_objects --args \'{"object_types": ["' ~ (object_types | join('", "')) ~ '"]}\'') }}
+    {% else %}
+      {{ print('dbt run-operation cleanup_temp_objects') }}
+    {% endif %}
+  {% endif %}
+{%- endmacro %}
