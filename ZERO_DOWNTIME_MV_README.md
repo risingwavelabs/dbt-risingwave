@@ -5,7 +5,7 @@
 This feature enables zero downtime rebuilds of both Materialized Views (MVs) and Views by using different strategies depending on the materialization type:
 
 - **Materialized Views**: Uses RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax for atomic exchanges
-- **Views**: Uses `CREATE OR REPLACE VIEW` for immediate updates
+- **Views**: Uses `ALTER VIEW SWAP` syntax for atomic exchanges (similar to MVs)
 
 This ensures seamless transitions during model updates with minimal downtime impact on dependent objects.
 
