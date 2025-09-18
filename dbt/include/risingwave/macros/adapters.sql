@@ -56,9 +56,12 @@
   ({{ comma_separated_columns }});
 {%- endmacro %}
 
-{%- macro risingwave__get_drop_index_sql(name, columns) -%}
-    {%- set index_name = risingwave__get_index_name(name, columns) -%}
-    drop index if exists "{{ index_name }}";
+{%- macro risingwave__get_drop_index_sql(relation, index_name) -%}
+    {%- set db_name = relation.database -%}
+    {%- set schema_name = relation.schema -%}
+
+    drop index if exists
+     "{{ db_name }}"."{{ schema_name }}"."{{ index_name }}";
 {%- endmacro -%}
 
 {% macro risingwave__drop_relation(relation) -%}
@@ -169,7 +172,7 @@
 
         {%- if _index_change.action == "drop" -%}
 
-            {{ risingwave__get_drop_index_sql(_index.name, _index.column_names) }};
+            {{ risingwave__get_drop_index_sql(relation, _index.name) }};
 
         {%- elif _index_change.action == "create" -%}
 
