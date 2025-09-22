@@ -191,7 +191,7 @@
         'btree'                                     as method,
         ix.indisunique                              as "unique",
         a.attname                                   as attname,
-        array_position(ix.indkey, a.attnum)        as ord
+        array_position(ix.indkey, a.attnum)         as ord
     from pg_index ix
     join pg_class i
         on i.oid = ix.indexrelid
@@ -202,6 +202,9 @@
     join pg_attribute a
         on a.attrelid = t.oid
         and a.attnum = ANY(ix.indkey)
+        -- Only include the first indnkeyatts columns (the actual index key columns)
+        -- The rest are implicit INCLUDE columns in RisingWave
+        and array_position(ix.indkey, a.attnum) <= ix.indnkeyatts
     where t.relname = '{{ relation.identifier }}'
       and n.nspname = '{{ relation.schema }}'
       and t.relkind in ('r', 'm')
