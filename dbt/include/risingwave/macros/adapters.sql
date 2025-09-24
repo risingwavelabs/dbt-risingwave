@@ -188,8 +188,6 @@
     with index_info as (
     select
         i.relname                                   as name,
-        'btree'                                     as method,
-        ix.indisunique                              as "unique",
         a.attname                                   as attname,
         array_position(ix.indkey, a.attnum)         as ord
     from pg_index ix
@@ -210,9 +208,9 @@
       and t.relkind in ('r', 'm')
       and ix.indisprimary = false
     )
-    select name, method, "unique", array_to_string(array_agg(attname order by ord), ',') as column_names from index_info
-    group by 1, 2, 3
-    order by 1, 2, 3;
+    select name, array_to_string(array_agg(attname order by ord), ',') as column_names from index_info
+    group by name
+    order by name;
 {% endmacro %}
 
 {% macro risingwave__execute_no_op(target_relation) %}
