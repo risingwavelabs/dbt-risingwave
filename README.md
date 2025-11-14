@@ -41,6 +41,18 @@ default:
 
 4. Run `dbt debug` to check whether the configuration is correct.
 
+### Controlling streaming parallelism
+
+RisingWave exposes the session variables `streaming_parallelism` and `streaming_max_parallelism`. When these values are provided in a profile (see the example above) the adapter issues the corresponding `SET` statements as soon as a connection is opened, ensuring every model uses the desired streaming configuration.
+
+You can also scope the settings to specific models via `config()` (or in `dbt_project.yml`). The adapter now injects the statements ahead of every model's SQL:
+
+```sql
+{{ config(materialized='materialized_view', streaming_parallelism=2, streaming_max_parallelism=8) }}
+
+select ...
+```
+
 ## Models
 
 The dbt models for managing data transformations in RisingWave are similar to typical dbt sql models. The main differences are the materializations. We customized the materializations to fit the data processing model of RisingWave.
