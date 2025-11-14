@@ -36,9 +36,6 @@ default:
       dbname: dev
       port: 4566
       schema: public
-      # Optional session level streaming settings
-      streaming_parallelism: 4
-      streaming_max_parallelism: 16
   target: dev
 ```
 
