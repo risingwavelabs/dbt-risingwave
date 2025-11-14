@@ -1,6 +1,27 @@
 -- The original postgres adapter only queries tables and views without index.
 -- But materialize verison includes 'index' type.
 -- Here we only query table, view, materialized view and source. (without index and SINK)
+
+{% macro risingwave__render_sql_header() -%}
+  {%- set header_parts = [] -%}
+  {%- set user_header = config.get("sql_header", none) -%}
+  {%- if user_header is not none -%}
+    {%- do header_parts.append(user_header) -%}
+  {%- endif -%}
+
+  {%- set streaming_parallelism = config.get("streaming_parallelism", none) -%}
+  {%- if streaming_parallelism is not none -%}
+    {%- do header_parts.append("set streaming_parallelism = " ~ streaming_parallelism ~ ";") -%}
+  {%- endif -%}
+
+  {%- set streaming_max_parallelism = config.get("streaming_max_parallelism", none) -%}
+  {%- if streaming_max_parallelism is not none -%}
+    {%- do header_parts.append("set streaming_max_parallelism = " ~ streaming_max_parallelism ~ ";") -%}
+  {%- endif -%}
+
+  {{- header_parts | join("\n") -}}
+{%- endmacro %}
+
 {% macro risingwave__list_relations_without_caching(schema_relation) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
@@ -83,8 +104,7 @@
 {% endmacro %}
 
 {% macro risingwave__create_view_as(relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
   create view if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
@@ -96,8 +116,7 @@
 {%- endmacro %}
 
 {% macro risingwave__create_table_as(relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
   create table if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
@@ -109,8 +128,7 @@
 {%- endmacro %}
 
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
   create materialized view if not exists {{ relation }}
     {% set contract_config = config.get('contract') %}
@@ -122,8 +140,7 @@
 {%- endmacro %}
 
 {% macro risingwave__create_sink(relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
     {%- set _format_parameters = config.get("format_parameters") -%}
     {%- set data_format = config.get("data_format") -%}
@@ -161,6 +178,7 @@
   {% if contract_config.enforced %}
     {{exceptions.warn("Model contracts cannot be enforced for source, table_with_connector and sink")}}
   {%- endif %}
+  {{ risingwave__render_sql_header() }}
   {{ sql }};
 {%- endmacro %}
 
@@ -257,8 +275,7 @@
 {% endmacro %}
 
 {%- macro risingwave__create_materialized_view_with_temp_name(temp_relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
   create materialized view {{ temp_relation }}
     {% set contract_config = config.get('contract') %}
@@ -270,8 +287,7 @@
 {%- endmacro %}
 
 {%- macro risingwave__create_view_with_temp_name(temp_relation, sql) -%}
-    {%- set sql_header = config.get("sql_header", none) -%}
-    {{ sql_header if sql_header is not none }}
+    {{ risingwave__render_sql_header() }}
 
   create view {{ temp_relation }}
     {% set contract_config = config.get('contract') %}

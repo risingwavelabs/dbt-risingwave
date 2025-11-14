@@ -21,6 +21,7 @@ class RisingWaveCredentials(PostgresCredentials):
 
     # todo(siwei): append more config here
     streaming_parallelism: Optional[int] = None
+    streaming_max_parallelism: Optional[int] = None
 
     @property
     def type(self):
@@ -133,8 +134,27 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
                 "gssencmode": "disable"  # see https://github.com/risingwavelabs/risingwave/issues/12124
             },
         )
-        connection.handle.cursor().execute("SET RW_IMPLICIT_FLUSH TO true")
+        credentials = cls.get_credentials(connection.credentials)
+        cls._configure_session(connection.handle, credentials)
         return connection
+
+    @staticmethod
+    def _configure_session(handle, credentials: RisingWaveCredentials):
+        if handle is None or credentials is None:
+            return
+
+        cursor = handle.cursor()
+        try:
+            cursor.execute("SET RW_IMPLICIT_FLUSH TO true")
+            session_settings = (
+                ("streaming_parallelism", credentials.streaming_parallelism),
+                ("streaming_max_parallelism", credentials.streaming_max_parallelism),
+            )
+            for setting, value in session_settings:
+                if value is not None:
+                    cursor.execute(f"SET {setting} = {value}")
+        finally:
+            cursor.close()
 
     def cancel(self, connection: Connection):
         # index here references the column order in processlist output:
