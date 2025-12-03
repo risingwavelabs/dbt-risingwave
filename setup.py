@@ -32,7 +32,7 @@ setup(
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
     install_requires=[
-        "dbt-postgres~=1.10.0",
+        "dbt-postgres~=1.9.0",
         "dbt-core~=1.10.0",
         # not sure if these are needed due to inheritance from dbt-postgres
         # but doesn't hurt to be explicit I suppose
