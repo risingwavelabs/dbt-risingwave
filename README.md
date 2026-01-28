@@ -5,7 +5,7 @@ adapter plugin for [dbt](https://www.getdbt.com/).
 
 **RisingWave** is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. https://www.risingwave.com
 
-**dbt** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications. [Use dbt for data transformations in RisingWave](https://docs.risingwave.com/docs/current/use-dbt/)
+**dbt** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications. [Use dbt for data transformations in RisingWave](https://docs.risingwave.com/integrations/other/dbt)
 
 ## Getting started
 
