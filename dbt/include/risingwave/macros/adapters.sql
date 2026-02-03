@@ -14,6 +14,11 @@
     {%- do header_parts.append("set streaming_parallelism = " ~ streaming_parallelism ~ ";") -%}
   {%- endif -%}
 
+  {%- set streaming_parallelism_for_backfill = config.get("streaming_parallelism_for_backfill", none) -%}
+  {%- if streaming_parallelism_for_backfill is not none -%}
+    {%- do header_parts.append("set streaming_parallelism_for_backfill = " ~ streaming_parallelism_for_backfill ~ ";") -%}
+  {%- endif -%}
+
   {%- set streaming_max_parallelism = config.get("streaming_max_parallelism", none) -%}
   {%- if streaming_max_parallelism is not none -%}
     {%- do header_parts.append("set streaming_max_parallelism = " ~ streaming_max_parallelism ~ ";") -%}

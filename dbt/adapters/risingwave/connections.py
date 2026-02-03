@@ -21,6 +21,7 @@ class RisingWaveCredentials(PostgresCredentials):
 
     # todo(siwei): append more config here
     streaming_parallelism: Optional[int] = None
+    streaming_parallelism_for_backfill: Optional[int] = None
     streaming_max_parallelism: Optional[int] = None
 
     @property
@@ -148,6 +149,10 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
             cursor.execute("SET RW_IMPLICIT_FLUSH TO true")
             session_settings = (
                 ("streaming_parallelism", credentials.streaming_parallelism),
+                (
+                    "streaming_parallelism_for_backfill",
+                    credentials.streaming_parallelism_for_backfill,
+                ),
                 ("streaming_max_parallelism", credentials.streaming_max_parallelism),
             )
             for setting, value in session_settings:
