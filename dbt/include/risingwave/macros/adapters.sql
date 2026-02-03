@@ -136,6 +136,10 @@
     {{ risingwave__render_sql_header() }}
 
   create materialized view if not exists {{ relation }}
+    {% set streaming_rate_limit = config.get('streaming_rate_limit') | int %}
+    {% if streaming_rate_limit %}
+        with (streaming_rate_limit = {{ streaming_rate_limit }})
+    {% endif %}
     {% set contract_config = config.get('contract') %}
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
