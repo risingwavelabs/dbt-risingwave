@@ -43,23 +43,22 @@ default:
 
 ### Schema authorization
 
-You can configure the owner of schemas created by dbt using the `schema_authorization` option in your profile or model config. When set, dbt will create schemas with `AUTHORIZATION <role>`, transferring ownership to that role.
+You can configure the owner of schemas created by dbt using the `schema_authorization` option in your model config (or in `dbt_project.yml`). When set, dbt will create schemas with `AUTHORIZATION <role>`, transferring ownership to that role.
 
-Add `schema_authorization` to your profile:
+Add `schema_authorization` to your model config:
+
+```sql
+{{ config(materialized='table', schema_authorization='my_role') }}
+
+select ...
+```
+
+Or apply it globally in `dbt_project.yml`:
 
 ```yaml
-default:
-  outputs:
-    dev:
-      type: risingwave
-      host: 127.0.0.1
-      user: root
-      pass: ""
-      dbname: dev
-      port: 4566
-      schema: public
-      schema_authorization: my_role
-  target: dev
+models:
+  my_project:
+    +schema_authorization: my_role
 ```
 
 This will generate (the adapter automatically quotes the role name):
