@@ -46,6 +46,27 @@
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
 
+{% macro risingwave__create_schema(relation) -%}
+  {% if relation.database -%}
+    {{ adapter.verify_database(relation.database) }}
+  {%- endif -%}
+
+  {%- set schema_owner = none -%}
+  {%- if config is defined -%}
+    {%- set configured_owner = config.get("schema_authorization", none) -%}
+    {%- if configured_owner is not none and configured_owner | trim != "" -%}
+      {%- set schema_owner = configured_owner -%}
+    {%- endif -%}
+  {%- endif -%}
+
+  {%- call statement('create_schema') -%}
+    create schema if not exists {{ relation.without_identifier().include(database=False) }}
+    {%- if schema_owner %}
+      authorization {{ adapter.quote(schema_owner) }}
+    {%- endif %}
+  {%- endcall -%}
+{% endmacro %}
+
 {% macro risingwave__get_columns_in_relation(relation) -%}
   {% call statement('get_columns_in_relation', fetch_result=True) %}
       select
