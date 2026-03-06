@@ -41,6 +41,32 @@ default:
 
 4. Run `dbt debug` to check whether the configuration is correct.
 
+### Schema authorization
+
+You can configure the owner of schemas created by dbt using the `schema_authorization` option in your model config (or in `dbt_project.yml`). When set, dbt will create schemas with `AUTHORIZATION <role>`, transferring ownership to that role.
+
+Add `schema_authorization` to your model config:
+
+```sql
+{{ config(materialized='table', schema_authorization='my_role') }}
+
+select ...
+```
+
+Or apply it globally in `dbt_project.yml`:
+
+```yaml
+models:
+  my_project:
+    +schema_authorization: my_role
+```
+
+This will generate (the adapter automatically quotes the role name):
+
+```sql
+CREATE SCHEMA IF NOT EXISTS <schema_name> AUTHORIZATION "my_role"
+```
+
 ### Controlling streaming parallelism
 
 RisingWave exposes the session variables `streaming_parallelism`, `streaming_parallelism_for_backfill`, and `streaming_max_parallelism`. When these values are provided in a profile (see the example above) the adapter issues the corresponding `SET` statements as soon as a connection is opened, ensuring every model uses the desired streaming configuration.
