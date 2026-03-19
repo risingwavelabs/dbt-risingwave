@@ -79,6 +79,44 @@ You can also scope the settings to specific models via `config()` (or in `dbt_pr
 select ...
 ```
 
+### Background DDL
+
+dbt-risingwave supports opting into RisingWave background DDL for these materialization paths:
+
+- `materialized_view`
+- `materializedview`
+- `table`
+- `sink`
+- index creation triggered by model `indexes` config
+
+Enable it per model with `background_ddl=true`:
+
+```sql
+{{ config(materialized='materialized_view', background_ddl=true) }}
+
+select ...
+```
+
+Or set it in `dbt_project.yml`:
+
+```yaml
+models:
+  my_project:
+    +background_ddl: true
+```
+
+How it works:
+
+- The adapter sets RisingWave session variable `background_ddl = true` before running the model DDL.
+- After submitting supported DDL, the adapter issues RisingWave `WAIT`.
+- dbt does not continue to downstream models, hooks, or tests until `WAIT` returns.
+
+This preserves normal dbt node-completion semantics while still letting RisingWave execute the supported DDL in background mode under the hood.
+
+Important caveat:
+
+- RisingWave `WAIT` waits for all background creating jobs, not only the job started by the current dbt model. If other background DDL is running in the same cluster, the dbt node may wait on that work too.
+
 ## Models
 
 The dbt models for managing data transformations in RisingWave are similar to typical dbt sql models. The main differences are the materializations. We customized the materializations to fit the data processing model of RisingWave.
