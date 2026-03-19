@@ -9,6 +9,11 @@
     {%- do header_parts.append(user_header) -%}
   {%- endif -%}
 
+  {%- set background_ddl = config.get("background_ddl", false) -%}
+  {%- if background_ddl -%}
+    {%- do header_parts.append("set background_ddl = true;") -%}
+  {%- endif -%}
+
   {%- set streaming_parallelism = config.get("streaming_parallelism", none) -%}
   {%- if streaming_parallelism is not none -%}
     {%- do header_parts.append("set streaming_parallelism = " ~ streaming_parallelism ~ ";") -%}
@@ -266,6 +271,187 @@
     ) %}
 {% endmacro %}
 
+{% macro risingwave__background_ddl_enabled() %}
+  {{ return(config.get("background_ddl", false)) }}
+{% endmacro %}
+
+{% macro risingwave__background_ddl_timeout_s() %}
+  {{ return(config.get("background_ddl_timeout_s", 1800)) }}
+{% endmacro %}
+
+{% macro risingwave__background_ddl_poll_interval_s() %}
+  {{ return(config.get("background_ddl_poll_interval_s", 1)) }}
+{% endmacro %}
+
+{% macro risingwave__background_ddl_verify_with_streaming_jobs() %}
+  {{ return(config.get("background_ddl_verify_with_streaming_jobs", true)) }}
+{% endmacro %}
+
+{% macro risingwave__get_background_ddl_status_sql(relation, relation_type, identifier=none) %}
+  {%- set schema_name = relation.schema | replace("'", "''") -%}
+  {%- set object_name = (identifier or relation.identifier) | replace("'", "''") -%}
+  {%- set verify_job = risingwave__background_ddl_verify_with_streaming_jobs() -%}
+  {%- set job_status_expr = "sj.status" if verify_job else "null" -%}
+
+  {% if relation_type in ('materialized_view', 'materializedview') %}
+    select
+      mv.id,
+      mv.background_ddl,
+      mv.status as object_status,
+      {{ job_status_expr }} as job_status
+    from rw_catalog.rw_materialized_views mv
+    join rw_catalog.rw_schemas s
+      on mv.schema_id = s.id
+    {% if verify_job %}
+    left join rw_catalog.rw_streaming_jobs sj
+      on sj.id = mv.id
+    {% endif %}
+    where s.name = '{{ schema_name }}'
+      and mv.name = '{{ object_name }}'
+  {% elif relation_type == 'sink' %}
+    select
+      sink.id,
+      sink.background_ddl,
+      cast(null as varchar) as object_status,
+      {{ job_status_expr }} as job_status
+    from rw_catalog.rw_sinks sink
+    join rw_catalog.rw_schemas s
+      on sink.schema_id = s.id
+    {% if verify_job %}
+    left join rw_catalog.rw_streaming_jobs sj
+      on sj.id = sink.id
+    {% endif %}
+    where s.name = '{{ schema_name }}'
+      and sink.name = '{{ object_name }}'
+  {% elif relation_type == 'index' %}
+    select
+      idx.id,
+      idx.background_ddl,
+      cast(null as varchar) as object_status,
+      {{ job_status_expr }} as job_status
+    from rw_catalog.rw_indexes idx
+    join rw_catalog.rw_schemas s
+      on idx.schema_id = s.id
+    {% if verify_job %}
+    left join rw_catalog.rw_streaming_jobs sj
+      on sj.id = idx.id
+    {% endif %}
+    where s.name = '{{ schema_name }}'
+      and idx.name = '{{ object_name }}'
+  {% elif relation_type == 'table' %}
+    select
+      tbl.id,
+      cast(null as boolean) as background_ddl,
+      cast(null as varchar) as object_status,
+      {{ job_status_expr }} as job_status
+    from rw_catalog.rw_tables tbl
+    join rw_catalog.rw_schemas s
+      on tbl.schema_id = s.id
+    {% if verify_job %}
+    left join rw_catalog.rw_streaming_jobs sj
+      on sj.id = tbl.id
+    {% endif %}
+    where s.name = '{{ schema_name }}'
+      and tbl.name = '{{ object_name }}'
+  {% else %}
+    select
+      cast(null as integer) as id,
+      cast(null as boolean) as background_ddl,
+      cast(null as varchar) as object_status,
+      cast(null as varchar) as job_status
+    where false
+  {% endif %}
+{% endmacro %}
+
+{% macro risingwave__get_background_ddl_status_row(relation, relation_type, identifier=none) %}
+  {% set result = run_query(risingwave__get_background_ddl_status_sql(relation, relation_type, identifier)) %}
+  {% if execute and result is not none and (result.rows | length) > 0 %}
+    {{ return(result.rows[0]) }}
+  {% endif %}
+  {{ return(none) }}
+{% endmacro %}
+
+{% macro risingwave__wait_for_background_ddl(relation, relation_type=none, identifier=none) %}
+  {% if not risingwave__background_ddl_enabled() %}
+    {{ return("") }}
+  {% endif %}
+
+  {%- set relation_type = relation_type or relation.type -%}
+  {%- set poll_interval_s = risingwave__background_ddl_poll_interval_s() | int -%}
+  {%- set timeout_s = risingwave__background_ddl_timeout_s() | int -%}
+  {%- set max_attempts = timeout_s // (poll_interval_s if poll_interval_s > 0 else 1) -%}
+  {%- if max_attempts < 1 -%}
+    {%- set max_attempts = 1 -%}
+  {%- endif -%}
+
+  {# Give the catalog a short window to expose the created object and its job row. #}
+  {% set row = none %}
+  {% for _ in range(0, max_attempts + 1) %}
+    {% if row is none %}
+      {% set row = risingwave__get_background_ddl_status_row(relation, relation_type, identifier) %}
+    {% endif %}
+    {% if row is none and not loop.last %}
+      {% do adapter.sleep(poll_interval_s) %}
+    {% endif %}
+  {% endfor %}
+
+  {% if row is none %}
+    {{ exceptions.raise_compiler_error(
+      "background ddl verification failed for " ~ relation_type ~ " " ~ (identifier or relation.identifier) ~
+      ": object was not found in catalog before timeout"
+    ) }}
+  {% endif %}
+
+  {% set object_status = row[2] %}
+  {% set job_status = row[3] %}
+  {% set background_ddl = row[1] %}
+
+  {% if relation_type != 'table' and background_ddl == false %}
+    {{ return("") }}
+  {% endif %}
+
+  {% if relation_type == 'table' and job_status is none %}
+    {{ return("") }}
+  {% endif %}
+
+  {% if object_status == 'Created' or job_status == 'CREATED' %}
+    {{ return("") }}
+  {% endif %}
+
+  {% if object_status == 'Creating' or job_status == 'CREATING' %}
+    {% do run_query('WAIT') %}
+    {% set row = risingwave__get_background_ddl_status_row(relation, relation_type, identifier) %}
+    {% if row is none %}
+      {{ exceptions.raise_compiler_error(
+        "background ddl wait failed for " ~ relation_type ~ " " ~ (identifier or relation.identifier) ~
+        ": object disappeared from catalog after WAIT"
+      ) }}
+    {% endif %}
+    {% set object_status = row[2] %}
+    {% set job_status = row[3] %}
+  {% endif %}
+
+  {% if object_status != 'Created' and job_status != 'CREATED' %}
+    {{ exceptions.raise_compiler_error(
+      "background ddl did not reach Created for " ~ relation_type ~ " " ~ (identifier or relation.identifier) ~
+      ". relation_status=" ~ (object_status or 'null') ~ ", job_status=" ~ (job_status or 'null')
+    ) }}
+  {% endif %}
+{% endmacro %}
+
+{% macro risingwave__wait_for_background_indexes(relation) %}
+  {% if not risingwave__background_ddl_enabled() %}
+    {{ return("") }}
+  {% endif %}
+
+  {%- set index_configs = config.get('indexes', []) -%}
+  {% for index_dict in index_configs %}
+    {%- set index_config = adapter.parse_index(index_dict) -%}
+    {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
+    {{ risingwave__wait_for_background_ddl(relation, 'index', index_name) }}
+  {% endfor %}
+{% endmacro %}
+
 {% macro risingwave__handle_on_configuration_change(old_relation, target_relation) %}
     {#
     This macro is used to handle the `on_configuration_change` configuration option.
@@ -282,6 +468,12 @@
       {% call statement('main') -%}
         {{ risingwave__update_indexes_on_materialized_view(target_relation, configuration_changes.indexes) }}
       {%- endcall %}
+      {% for _index_change in configuration_changes.indexes %}
+        {% if _index_change.action == "create" %}
+          {%- set _index = _index_change.context -%}
+          {{ risingwave__wait_for_background_ddl(target_relation, 'index', _index.name) }}
+        {% endif %}
+      {% endfor %}
     {% elif on_configuration_change == 'continue' %}
         -- do nothing but a warning
         {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for {}".format(target_relation)) }}

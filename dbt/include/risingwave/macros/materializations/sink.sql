@@ -29,6 +29,7 @@
               {{ risingwave__run_sql(sql) }}
             {% endif %}
         {%- endcall %}
+        {{ risingwave__wait_for_background_ddl(target_relation, 'sink') }}
     {% else %}
       {{ risingwave__execute_no_op(target_relation) }}
     {% endif %}

@@ -21,15 +21,19 @@
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
+    {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
     {{ create_indexes(target_relation) }}
+    {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% elif full_refresh_mode and old_relation %}
     {# Full refresh mode - already dropped above, create new #}
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
+    {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
     {{ create_indexes(target_relation) }}
+    {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% else %}
     {# MV exists and not in full refresh mode - use existing configuration change handling #}
     {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
