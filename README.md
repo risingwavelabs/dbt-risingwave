@@ -4,6 +4,8 @@ A [RisingWave](https://github.com/risingwavelabs/risingwave) adapter plugin for 
 
 RisingWave is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. See <https://www.risingwave.com>.
 
+dbt enables data analysts and engineers to transform data using software engineering workflows. For the broader RisingWave integration guide, see <https://docs.risingwave.com/integrations/other/dbt>.
+
 ## Getting Started
 
 1. Install `dbt-risingwave`.
@@ -32,9 +34,50 @@ default:
 
 4. Run `dbt debug` to verify the connection.
 
+## Common Features
+
+The root README keeps the most common adapter capabilities visible, while the detailed reference now lives under [`docs/`](docs/README.md).
+
+### Schema Authorization
+
+Use `schema_authorization` when dbt should create schemas with a specific owner:
+
+```sql
+{{ config(materialized='table', schema_authorization='my_role') }}
+```
+
+See [docs/configuration.md](docs/configuration.md) for model-level and `dbt_project.yml` examples.
+
+### Streaming Parallelism
+
+The adapter supports RisingWave session settings such as `streaming_parallelism`, `streaming_parallelism_for_backfill`, and `streaming_max_parallelism` in both profiles and model configs.
+
+See [docs/configuration.md](docs/configuration.md) for the full configuration matrix.
+
+### Background DDL
+
+`background_ddl=true` lets supported materializations submit background DDL while still preserving dbt semantics by issuing RisingWave `WAIT` before dbt continues.
+
+See [docs/configuration.md](docs/configuration.md) for supported materializations, examples, and the cluster-wide `WAIT` caveat.
+
+### Zero-Downtime Rebuilds
+
+`materialized_view` and `view` support swap-based zero-downtime rebuilds through `zero_downtime={'enabled': true}` plus the runtime flag `--vars 'zero_downtime: true'`.
+
+See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for requirements, cleanup behavior, and helper commands.
+
 ## Materializations
 
 The adapter follows standard dbt model workflows, with RisingWave-specific materializations and behaviors.
+
+Typical usage:
+
+```sql
+{{ config(materialized='materialized_view') }}
+
+select *
+from {{ ref('events') }}
+```
 
 | Materialization | Notes |
 | --- | --- |
