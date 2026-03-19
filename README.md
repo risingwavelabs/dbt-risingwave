@@ -36,7 +36,7 @@ default:
 
 ## Common Features
 
-The root README keeps the most common adapter capabilities visible, while the detailed reference now lives under [`docs/`](docs/README.md).
+Detailed reference: [`docs/`](docs/README.md).
 
 ### Schema Authorization
 
@@ -109,9 +109,9 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 [Graph operators](https://docs.getdbt.com/reference/node-selection/graph-operators) are useful when you want to rebuild only part of a project.
 
 ```sh
-dbt run --select "my_model+"
-dbt run --select "+my_model"
-dbt run --select "+my_model+"
+dbt run --select "my_model+"   # select my_model and all children
+dbt run --select "+my_model"   # select my_model and all parents
+dbt run --select "+my_model+"  # select my_model, and all of its parents and children
 ```
 
 ## Examples
