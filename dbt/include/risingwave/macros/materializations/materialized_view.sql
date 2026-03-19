@@ -28,15 +28,19 @@
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
+    {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
     {{ create_indexes(target_relation) }}
+    {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% elif full_refresh_mode and old_relation %}
     {# Full refresh mode - already dropped above, create new #}
     {% call statement('main') -%}
       {{ risingwave__create_materialized_view_as(target_relation, sql) }}
     {%- endcall %}
+    {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
     {{ create_indexes(target_relation) }}
+    {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% else %}
     {# MV exists and not in full refresh mode #}
     {% if zero_downtime_mode %}
@@ -56,6 +60,7 @@
       {% call statement('main') -%}
         {{ risingwave__create_materialized_view_with_temp_name(temp_relation, sql) }}
       {%- endcall %}
+      {{ risingwave__wait_for_background_ddl(temp_relation, 'materialized_view') }}
 
       {# Step 2: Swap the materialized views #}
       {% call statement('swap') -%}
@@ -72,6 +77,7 @@
       {% endif %}
       
       {{ create_indexes(target_relation) }}
+      {{ risingwave__wait_for_background_indexes(target_relation) }}
     {% else %}
       {# Zero downtime disabled - either model config or user flag is missing #}
       {% if model_has_zero_downtime and not user_requested_zero_downtime %}

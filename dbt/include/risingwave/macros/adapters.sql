@@ -9,6 +9,11 @@
     {%- do header_parts.append(user_header) -%}
   {%- endif -%}
 
+  {%- set background_ddl = config.get("background_ddl", false) -%}
+  {%- if background_ddl -%}
+    {%- do header_parts.append("set background_ddl = true;") -%}
+  {%- endif -%}
+
   {%- set streaming_parallelism = config.get("streaming_parallelism", none) -%}
   {%- if streaming_parallelism is not none -%}
     {%- do header_parts.append("set streaming_parallelism = " ~ streaming_parallelism ~ ";") -%}
@@ -266,6 +271,28 @@
     ) %}
 {% endmacro %}
 
+{% macro risingwave__background_ddl_enabled() %}
+  {{ return(config.get("background_ddl", false)) }}
+{% endmacro %}
+
+{% macro risingwave__wait_for_background_ddl(relation, relation_type=none, identifier=none) %}
+  {% if not risingwave__background_ddl_enabled() %}
+    {{ return("") }}
+  {% endif %}
+  {% do run_query('WAIT') %}
+{% endmacro %}
+
+{% macro risingwave__wait_for_background_indexes(relation) %}
+  {% if not risingwave__background_ddl_enabled() %}
+    {{ return("") }}
+  {% endif %}
+
+  {%- set index_configs = config.get('indexes', []) -%}
+  {% if index_configs | length > 0 %}
+    {% do run_query('WAIT') %}
+  {% endif %}
+{% endmacro %}
+
 {% macro risingwave__handle_on_configuration_change(old_relation, target_relation) %}
     {#
     This macro is used to handle the `on_configuration_change` configuration option.
@@ -282,6 +309,7 @@
       {% call statement('main') -%}
         {{ risingwave__update_indexes_on_materialized_view(target_relation, configuration_changes.indexes) }}
       {%- endcall %}
+      {{ risingwave__wait_for_background_ddl(target_relation, 'index') }}
     {% elif on_configuration_change == 'continue' %}
         -- do nothing but a warning
         {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for {}".format(target_relation)) }}

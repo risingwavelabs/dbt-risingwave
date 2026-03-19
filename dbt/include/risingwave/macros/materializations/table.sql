@@ -20,8 +20,10 @@
     {% call statement('main') -%}
       {{ risingwave__create_table_as(target_relation, sql) }}
     {%- endcall %}
+    {{ risingwave__wait_for_background_ddl(target_relation, 'table') }}
 
     {{ create_indexes(target_relation) }}
+    {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% else %}
     {{ risingwave__execute_no_op(target_relation) }}
   {% endif %}
