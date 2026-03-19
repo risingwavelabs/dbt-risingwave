@@ -1,29 +1,20 @@
 # dbt-risingwave
 
-A [RisingWave](https://github.com/risingwavelabs/risingwave) 
-adapter plugin for [dbt](https://www.getdbt.com/).
+A [RisingWave](https://github.com/risingwavelabs/risingwave) adapter plugin for [dbt](https://www.getdbt.com/).
 
-**RisingWave** is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. https://www.risingwave.com
+RisingWave is a cloud-native streaming database that uses SQL as the interface language. It is designed to reduce the complexity and cost of building real-time applications. See <https://www.risingwave.com>.
 
-**dbt** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications. [Use dbt for data transformations in RisingWave](https://docs.risingwave.com/integrations/other/dbt)
+## Getting Started
 
-## Getting started
+1. Install `dbt-risingwave`.
 
-The package has not been published to PyPI, please install it via git.
-
-1. Install `dbt-risingwave`
-
-``` shell
+```shell
 python3 -m pip install dbt-risingwave
 ```
 
-2. Get `RisingWave` running
+2. Get RisingWave running by following the official guide: <https://www.risingwave.dev/docs/current/get-started/>.
 
-Please follow [this](https://www.risingwave.dev/docs/current/get-started/) guide to set up a functional RisingWave instance.
-
-3. Configure the `dbt` profile file
-
-The profile file is located in `~/.dbt/profiles.yml`. Here's an example of how to use it with RisingWave.
+3. Configure `~/.dbt/profiles.yml`.
 
 ```yaml
 default:
@@ -39,131 +30,48 @@ default:
   target: dev
 ```
 
-4. Run `dbt debug` to check whether the configuration is correct.
+4. Run `dbt debug` to verify the connection.
 
-### Schema authorization
+## Materializations
 
-You can configure the owner of schemas created by dbt using the `schema_authorization` option in your model config (or in `dbt_project.yml`). When set, dbt will create schemas with `AUTHORIZATION <role>`, transferring ownership to that role.
+The adapter follows standard dbt model workflows, with RisingWave-specific materializations and behaviors.
 
-Add `schema_authorization` to your model config:
+| Materialization | Notes |
+| --- | --- |
+| `materialized_view` | Creates a materialized view. This is the main streaming materialization for RisingWave. |
+| `materializedview` | Deprecated. Kept only for backward compatibility. Use `materialized_view` instead. |
+| `ephemeral` | Uses common table expressions under the hood. |
+| `table` | Creates a table from the model query. |
+| `view` | Creates a view from the model query. |
+| `incremental` | Batch-style incremental updates for tables. Prefer `materialized_view` when a streaming MV fits the workload. |
+| `source` | Runs a full `CREATE SOURCE` statement supplied by the model SQL. |
+| `table_with_connector` | Runs a full `CREATE TABLE ... WITH (...)` statement supplied by the model SQL. |
+| `sink` | Creates a sink, either from adapter configs or from a full SQL statement. |
 
-```sql
-{{ config(materialized='table', schema_authorization='my_role') }}
+See [docs/configuration.md](docs/configuration.md) for adapter-specific configuration examples, including streaming session settings and background DDL.
 
-select ...
-```
+## Documentation
 
-Or apply it globally in `dbt_project.yml`:
+- [docs/README.md](docs/README.md): documentation index
+- [docs/configuration.md](docs/configuration.md): profile options, model configs, sink settings, and background DDL usage
+- [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md): zero-downtime rebuild behavior for materialized views and views
 
-```yaml
-models:
-  my_project:
-    +schema_authorization: my_role
-```
+## dbt Run Behavior
 
-This will generate (the adapter automatically quotes the role name):
+- `dbt run`: creates models that do not already exist.
+- `dbt run --full-refresh`: drops and recreates models so the deployed objects match the current dbt definitions.
 
-```sql
-CREATE SCHEMA IF NOT EXISTS <schema_name> AUTHORIZATION "my_role"
-```
+## Graph Operators
 
-### Controlling streaming parallelism
-
-RisingWave exposes the session variables `streaming_parallelism`, `streaming_parallelism_for_backfill`, and `streaming_max_parallelism`. When these values are provided in a profile (see the example above) the adapter issues the corresponding `SET` statements as soon as a connection is opened, ensuring every model uses the desired streaming configuration.
-
-You can also scope the settings to specific models via `config()` (or in `dbt_project.yml`). The adapter now injects the statements ahead of every model's SQL:
-
-```sql
-{{ config(materialized='materialized_view', streaming_parallelism=2, streaming_parallelism_for_backfill=2, streaming_max_parallelism=8) }}
-
-select ...
-```
-
-### Background DDL
-
-dbt-risingwave supports opting into RisingWave background DDL for these materialization paths:
-
-- `materialized_view`
-- `table`
-- `sink`
-- index creation triggered by model `indexes` config
-
-Enable it per model with `background_ddl=true`:
-
-```sql
-{{ config(materialized='materialized_view', background_ddl=true) }}
-
-select ...
-```
-
-Or set it in `dbt_project.yml`:
-
-```yaml
-models:
-  my_project:
-    +background_ddl: true
-```
-
-How it works:
-
-- The adapter sets RisingWave session variable `background_ddl = true` before running the model DDL.
-- After submitting supported DDL, the adapter issues RisingWave `WAIT`.
-- dbt does not continue to downstream models, hooks, or tests until `WAIT` returns.
-
-This preserves normal dbt node-completion semantics while still letting RisingWave execute the supported DDL in background mode under the hood.
-
-Important caveat:
-
-- RisingWave `WAIT` waits for all background creating jobs, not only the job started by the current dbt model. If other background DDL is running in the same cluster, the dbt node may wait on that work too.
-
-## Models
-
-The dbt models for managing data transformations in RisingWave are similar to typical dbt sql models. The main differences are the materializations. We customized the materializations to fit the data processing model of RisingWave.
-
-| Materializations      | INFO                   |
-| ---------------------- | --------------------- |
-| materialized_view      | Create a materialized view. This materialization corresponds to the incremental one in dbt. To use this materialization, add {{ config(materialized='materialized_view') }} to your model SQL files. **NEW: Supports zero downtime rebuilds using ALTER MATERIALIZED VIEW SWAP syntax when both model config has zero_downtime={'enabled': true} AND --vars 'zero_downtime: true' is provided (requires RisingWave v2.2+).**                      |
-| materializedview       | (Deprecated) only for backward compatibility, use `materialized_view` instead. **Zero downtime rebuilds are not supported - please migrate to `materialized_view` to use this feature.**                      |
-| ephemeral              | This materialization uses common table expressions in RisingWave under the hood. To use this materialization, add {{ config(materialized='ephemeral') }} to your model SQL files.                      |
-| table                  | Create a table. To use this materialization, add {{ config(materialized='table') }} to your model SQL files. |
-| view                   | Create a view. To use this materialization, add {{ config(materialized='view') }} to your model SQL files. |
-| incremental            | Use `materialized_view` instead if possible, since RisingWave is designed to use a materialized view to manage data transformation in an incremental way. From v1.7.3, dbt-risingwave supports `incremental` model to give users better control of when to update their model. This model will update the table in a batch way incrementally.                     |
-| source                 | Define a source {{ config(materialized='source') }}. You need to provide your create source statement as a whole in this model.                      |
-| table_with_connector   | Define a table with a connector {{ config(materialized='table_with_connector') }}. You need to provide your create table with connector statement as a whole in this model. Because dbt `table` has its own semantics, RisingWave uses `table_with_connector` to distinguish itself from it.  The connector is optional if you just want to define a table without anything connector.                    |
-| sink                   | Define a sink {{ config(materialized='sink') }}. You need to provide your create sink statement as a whole in this model.                      |
-
-To learn how to use, you can check RisingWave's official example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark).
-
-## Zero Downtime Materialized View Rebuilds
-
-**NEW FEATURE**: dbt-risingwave now supports zero downtime rebuilds for materialized views when SQL definitions change. This feature:
-
-- Uses RisingWave's `ALTER MATERIALIZED VIEW SWAP` syntax for atomic updates
-- **Requires RisingWave v2.2 or later** - the `ALTER MATERIALIZED VIEW SWAP` syntax is only available in RisingWave v2.2+
-- **Dual-layer safety** - requires both model config `zero_downtime={'enabled': true}` AND runtime flag `--vars 'zero_downtime: true'`
-- Maintains service availability during model updates when enabled
-- Provides runtime control over when zero downtime rebuilds are used
-
-For detailed documentation, see [ZERO_DOWNTIME_MV_README.md](ZERO_DOWNTIME_MV_README.md).
-
-## DBT RUN behavior
-
-- `dbt run`: only create new models (if not exists) without dropping any models.
-- `dbt run --full-refresh`: drop models and create the new ones. This command can make sure your streaming pipelines are consistent with what you define in dbt models.
-
-## Graph operators
-
-[Graph operators](https://docs.getdbt.com/reference/node-selection/graph-operators) is useful when you want to only recreate a subset of your models.
+[Graph operators](https://docs.getdbt.com/reference/node-selection/graph-operators) are useful when you want to rebuild only part of a project.
 
 ```sh
-dbt run --select "my_model+"         # select my_model and all children
-dbt run --select "+my_model"         # select my_model and all parents
-dbt run --select "+my_model+"         # select my_model, and all of its parents and children
+dbt run --select "my_model+"
+dbt run --select "+my_model"
+dbt run --select "+my_model+"
 ```
 
-## Tests
+## Examples
 
-All items below have been tested against the latest RisingWave daily build version.
-
-- [x] Offical example [jaffle_shop](https://github.com/dbt-labs/jaffle_shop) is tested.
-- [x] RisingWave offical example [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark) is tested.
+- Official dbt example: [jaffle_shop](https://github.com/dbt-labs/jaffle_shop)
+- RisingWave example: [dbt_rw_nexmark](https://github.com/risingwavelabs/dbt_rw_nexmark)
