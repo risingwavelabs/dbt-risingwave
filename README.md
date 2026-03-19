@@ -84,7 +84,6 @@ select ...
 dbt-risingwave supports opting into RisingWave background DDL for these materialization paths:
 
 - `materialized_view`
-- `materializedview`
 - `table`
 - `sink`
 - index creation triggered by model `indexes` config
