@@ -36,6 +36,7 @@ default:
       streaming_parallelism: 2
       streaming_parallelism_for_backfill: 2
       streaming_max_parallelism: 8
+      enable_serverless_backfill: true
   target: dev
 ```
 
@@ -46,6 +47,7 @@ Supported adapter-specific profile keys:
 | `streaming_parallelism` | Sets `SET streaming_parallelism = ...` for the session. |
 | `streaming_parallelism_for_backfill` | Sets `SET streaming_parallelism_for_backfill = ...` for the session. |
 | `streaming_max_parallelism` | Sets `SET streaming_max_parallelism = ...` for the session. |
+| `enable_serverless_backfill` | Sets `SET enable_serverless_backfill = true/false` for the session. |
 
 ## Model Configuration
 
@@ -109,6 +111,30 @@ from {{ ref('events') }}
 ```
 
 These values are emitted in the SQL header before the model DDL runs.
+
+### Serverless Backfill
+
+Use `enable_serverless_backfill` to enable serverless backfills for streaming queries on a per-model basis:
+
+```sql
+{{ config(
+    materialized='materialized_view',
+    enable_serverless_backfill=true
+) }}
+
+select *
+from {{ ref('events') }}
+```
+
+Or set it globally in `dbt_project.yml`:
+
+```yaml
+models:
+  my_project:
+    +enable_serverless_backfill: true
+```
+
+This emits `set enable_serverless_backfill = true;` before the model DDL runs.
 
 ### Background DDL
 

@@ -29,6 +29,11 @@
     {%- do header_parts.append("set streaming_max_parallelism = " ~ streaming_max_parallelism ~ ";") -%}
   {%- endif -%}
 
+  {%- set enable_serverless_backfill = config.get("enable_serverless_backfill", none) -%}
+  {%- if enable_serverless_backfill is not none -%}
+    {%- do header_parts.append("set enable_serverless_backfill = " ~ enable_serverless_backfill | lower ~ ";") -%}
+  {%- endif -%}
+
   {{- header_parts | join("\n") -}}
 {%- endmacro %}
 
