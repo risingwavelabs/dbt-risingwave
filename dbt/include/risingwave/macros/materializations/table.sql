@@ -18,7 +18,7 @@
 
   {% if old_relation is none or (full_refresh_mode and old_relation) %}
     {% call statement('main') -%}
-      {{ risingwave__create_table_as(target_relation, sql) }}
+      {{ risingwave__create_table_as(False, target_relation, sql) }}
     {%- endcall %}
     {{ risingwave__wait_for_background_ddl(target_relation, 'table') }}
 
