@@ -66,6 +66,36 @@ See [docs/configuration.md](docs/configuration.md) for supported materialization
 
 See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for requirements, cleanup behavior, and helper commands.
 
+### Indexes
+
+RisingWave indexes support `INCLUDE` and `DISTRIBUTED BY` clauses beyond what the Postgres adapter exposes. Configure them in the model config:
+
+```sql
+{{ config(
+    materialized='materialized_view',
+    indexes=[
+        {'columns': ['user_id'], 'include': ['name', 'email'], 'distributed_by': ['user_id']}
+    ]
+) }}
+```
+
+This generates:
+
+```sql
+CREATE INDEX IF NOT EXISTS "__dbt_index_mv_user_id"
+  ON mv (user_id)
+  INCLUDE (name, email)
+  DISTRIBUTED BY (user_id);
+```
+
+| Option | Description |
+| --- | --- |
+| `columns` | Key columns for the index (required). |
+| `include` | Additional columns stored in the index but not part of the key (optional). |
+| `distributed_by` | Columns used to distribute the index across nodes (optional). |
+
+Note: RisingWave does not support `unique` or `type` (index method) options from the Postgres adapter. These options are silently ignored.
+
 ## Materializations
 
 The adapter follows standard dbt model workflows, with RisingWave-specific materializations and behaviors.

@@ -105,7 +105,13 @@
   create index if not exists
   "{{ index_name }}"
   on {{ relation }}
-  ({{ comma_separated_columns }});
+  ({{ comma_separated_columns }})
+  {%- if index_dict.get('include', []) | length > 0 %}
+  include ({{ ", ".join(index_dict.get('include', [])) }})
+  {%- endif %}
+  {%- if index_dict.get('distributed_by', []) | length > 0 %}
+  distributed by ({{ ", ".join(index_dict.get('distributed_by', [])) }})
+  {%- endif %};
 {%- endmacro %}
 
 {%- macro risingwave__get_drop_index_sql(relation, index_name) -%}
@@ -146,6 +152,11 @@
   ;
 {%- endmacro %}
 
+{# Dispatch-compatible alias (dbt 1.8+) #}
+{% macro risingwave__get_create_view_as_sql(relation, sql) -%}
+    {{ risingwave__create_view_as(relation, sql) }}
+{%- endmacro %}
+
 {% macro risingwave__create_table_as(temporary, relation, sql) -%}
     {# RisingWave does not support temporary tables; the flag is accepted but ignored. #}
     {{ risingwave__render_sql_header() }}
@@ -159,6 +170,11 @@
   ;
 {%- endmacro %}
 
+{# Dispatch-compatible alias (dbt 1.8+) #}
+{% macro risingwave__get_create_table_as_sql(temporary, relation, compiled_code) -%}
+    {{ risingwave__create_table_as(temporary, relation, compiled_code) }}
+{%- endmacro %}
+
 {% macro risingwave__create_materialized_view_as(relation, sql) -%}
     {{ risingwave__render_sql_header() }}
 
@@ -169,6 +185,11 @@
     {%- endif %}
   as {{ sql }}
   ;
+{%- endmacro %}
+
+{# Dispatch-compatible alias (dbt 1.8+) #}
+{% macro risingwave__get_create_materialized_view_as_sql(relation, sql) -%}
+    {{ risingwave__create_materialized_view_as(relation, sql) }}
 {%- endmacro %}
 
 {% macro risingwave__create_sink(relation, sql) -%}
