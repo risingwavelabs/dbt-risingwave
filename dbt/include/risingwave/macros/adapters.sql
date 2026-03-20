@@ -146,7 +146,8 @@
   ;
 {%- endmacro %}
 
-{% macro risingwave__create_table_as(relation, sql) -%}
+{% macro risingwave__create_table_as(temporary, relation, sql) -%}
+    {# RisingWave does not support temporary tables; the flag is accepted but ignored. #}
     {{ risingwave__render_sql_header() }}
 
   create table if not exists {{ relation }}
