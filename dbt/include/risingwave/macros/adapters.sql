@@ -93,6 +93,22 @@
   {{ return(sql_convert_columns_in_relation(table)) }}
 {% endmacro %}
 
+{% macro risingwave__alter_relation_comment(relation, comment) %}
+  {# RisingWave uses COMMENT ON TABLE for all relation types including materialized views.
+     RisingWave does not support dollar-quoting, so we use single-quote escaping. #}
+  comment on table {{ relation }} is '{{ comment | replace("'", "''") }}';
+{% endmacro %}
+
+{% macro risingwave__alter_column_comment(relation, column_dict) %}
+  {# RisingWave only supports schema.table.column (3-part), not database.schema.table.column (4-part) #}
+  {% set existing_columns = adapter.get_columns_in_relation(relation) | map(attribute="name") | list %}
+  {% for column_name in column_dict if (column_name in existing_columns) %}
+    {% set comment = column_dict[column_name]["description"] %}
+    {% set col_ref = adapter.quote(column_name) if column_dict[column_name]['quote'] else column_name %}
+    comment on column "{{ relation.schema }}"."{{ relation.identifier }}".{{ col_ref }} is '{{ comment | replace("'", "''") }}';
+  {% endfor %}
+{% endmacro %}
+
 {% macro risingwave__get_index_name(name, columns) -%}
     {{ return("__dbt_index_{}_{}".format(name, "_".join(columns))) }}
 {% endmacro %}
