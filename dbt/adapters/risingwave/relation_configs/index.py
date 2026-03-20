@@ -21,6 +21,8 @@ class RisingWaveIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
 
     name: str = field(default="", hash=False, compare=False)
     column_names: tuple[str, ...] = field(default_factory=tuple, hash=True)
+    include_columns: tuple[str, ...] = field(default_factory=tuple, hash=True)
+    distributed_by_columns: tuple[str, ...] = field(default_factory=tuple, hash=True)
 
     @property
     def validation_rules(self) -> Set[RelationConfigValidationRule]:
@@ -47,6 +49,12 @@ class RisingWaveIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
             "column_names": tuple(
                 column.lower() for column in config_dict.get("column_names", [])
             ),
+            "include_columns": tuple(
+                column.lower() for column in config_dict.get("include_columns", [])
+            ),
+            "distributed_by_columns": tuple(
+                column.lower() for column in config_dict.get("distributed_by_columns", [])
+            ),
         }
         index: "RisingWaveIndexConfig" = super().from_dict(kwargs_dict)  # type: ignore
         return index
@@ -55,6 +63,8 @@ class RisingWaveIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     def parse_model_node(cls, model_node_entry: dict) -> dict:
         config_dict = {
             "column_names": tuple(model_node_entry.get("columns", [])),
+            "include_columns": tuple(model_node_entry.get("include", [])),
+            "distributed_by_columns": tuple(model_node_entry.get("distributed_by", [])),
         }
         return config_dict
 
@@ -72,6 +82,8 @@ class RisingWaveIndexConfig(RelationConfigBase, RelationConfigValidationMixin):
     def as_node_config(self) -> dict:
         node_config = {
             "columns": list(self.column_names),
+            "include": list(self.include_columns),
+            "distributed_by": list(self.distributed_by_columns),
         }
         return node_config
 

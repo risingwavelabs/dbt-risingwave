@@ -105,7 +105,13 @@
   create index if not exists
   "{{ index_name }}"
   on {{ relation }}
-  ({{ comma_separated_columns }});
+  ({{ comma_separated_columns }})
+  {%- if index_dict.get('include', []) | length > 0 %}
+  include ({{ ", ".join(index_dict.get('include', [])) }})
+  {%- endif %}
+  {%- if index_dict.get('distributed_by', []) | length > 0 %}
+  distributed by ({{ ", ".join(index_dict.get('distributed_by', [])) }})
+  {%- endif %};
 {%- endmacro %}
 
 {%- macro risingwave__get_drop_index_sql(relation, index_name) -%}
