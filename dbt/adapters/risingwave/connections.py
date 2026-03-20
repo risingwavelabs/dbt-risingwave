@@ -23,6 +23,7 @@ class RisingWaveCredentials(PostgresCredentials):
     streaming_parallelism: Optional[int] = None
     streaming_parallelism_for_backfill: Optional[int] = None
     streaming_max_parallelism: Optional[int] = None
+    enable_serverless_backfill: Optional[bool] = None
 
     @property
     def type(self):
@@ -154,6 +155,7 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
                     credentials.streaming_parallelism_for_backfill,
                 ),
                 ("streaming_max_parallelism", credentials.streaming_max_parallelism),
+                ("enable_serverless_backfill", credentials.enable_serverless_backfill),
             )
             for setting, value in session_settings:
                 if value is not None:
