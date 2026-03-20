@@ -108,6 +108,26 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 
 [Graph operators](https://docs.getdbt.com/reference/node-selection/graph-operators) are useful when you want to rebuild only part of a project.
 
+## Data Tests
+
+`dbt-risingwave` extends dbt data-test failure storage to support `materialized_view` in addition to the upstream `table` and `view` options.
+
+Example:
+
+```yaml
+models:
+  - name: my_model
+    columns:
+      - name: id
+        tests:
+          - not_null:
+              config:
+                store_failures: true
+                store_failures_as: materialized_view
+```
+
+This is useful for realtime monitoring workflows where test failures should remain continuously queryable as a RisingWave materialized view.
+
 ```sh
 dbt run --select "my_model+"   # select my_model and all children
 dbt run --select "+my_model"   # select my_model and all parents
