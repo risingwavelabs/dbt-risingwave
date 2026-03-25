@@ -54,6 +54,12 @@ The adapter supports RisingWave session settings such as `streaming_parallelism`
 
 See [docs/configuration.md](docs/configuration.md) for the full configuration matrix.
 
+### Serverless Backfill
+
+Use `enable_serverless_backfill=true` in a model config or profile to enable serverless backfills for streaming queries.
+
+See [docs/configuration.md](docs/configuration.md) for examples.
+
 ### Background DDL
 
 `background_ddl=true` lets supported materializations submit background DDL while still preserving dbt semantics by issuing RisingWave `WAIT` before dbt continues.
