@@ -9,6 +9,7 @@
                                                 database=database,
                                                 type='materialized_view') -%}
 
+  {%- set grant_config = config.get('grants') -%}
   {# Check both model config AND command line flag for zero downtime #}
   {%- set zero_downtime_config = config.get('zero_downtime', {}) -%}
   {%- set model_has_zero_downtime = zero_downtime_config.get('enabled', false) -%}
@@ -30,6 +31,9 @@
     {%- endcall %}
     {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
+    {% set should_revoke = should_revoke(existing_relation=none, full_refresh_mode=true) %}
+    {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
     {{ create_indexes(target_relation) }}
     {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% elif full_refresh_mode and old_relation %}
@@ -39,6 +43,9 @@
     {%- endcall %}
     {{ risingwave__wait_for_background_ddl(target_relation, 'materialized_view') }}
 
+    {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=true) %}
+    {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
     {{ create_indexes(target_relation) }}
     {{ risingwave__wait_for_background_indexes(target_relation) }}
   {% else %}
@@ -46,7 +53,7 @@
     {% if zero_downtime_mode %}
       {# Use zero downtime rebuild - both model config and user flag are enabled #}
       {{- log("Using zero downtime rebuild with SWAP for materialized view update.") -}}
-      
+
       {%- set temp_suffix = modules.datetime.datetime.now(modules.pytz.timezone('UTC')).isoformat().replace('-', '').replace(':', '').replace('.', '_') -%}
       {%- set temp_identifier = target_relation.identifier ~ "_dbt_zero_down_tmp_" ~ temp_suffix -%}
       {%- set temp_relation = api.Relation.create(
@@ -75,7 +82,11 @@
         {{- log("Preserving temporary materialized view for downstream dependencies: " ~ temp_relation) -}}
         {{- log("Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS " ~ temp_relation ~ ";") -}}
       {% endif %}
-      
+
+      {# TODO: Should this be before the swap to ensure actual zero downtime #}
+      {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=true) %}
+      {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
       {{ create_indexes(target_relation) }}
       {{ risingwave__wait_for_background_indexes(target_relation) }}
     {% else %}
