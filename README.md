@@ -74,11 +74,13 @@ See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for require
 
 ### Functions
 
-`dbt-risingwave` now supports a first version of dbt `function` resources for RisingWave SQL scalar UDFs.
+`dbt-risingwave` now supports a first version of dbt `function` resources for RisingWave scalar UDFs.
 
 Current contract:
 
-- supported: SQL scalar functions
+- supported:
+  - SQL scalar functions
+  - JavaScript scalar functions via `functions/*.sql` plus `config.language: javascript`
 - materialization: `CREATE FUNCTION IF NOT EXISTS`
 - supported volatility config:
   - `deterministic` -> `IMMUTABLE`
@@ -89,8 +91,10 @@ Current limits:
 
 - no replace/update path for an existing function body
 - no overload-family management
-- no aggregate/table/remote/embedded python/javascript functions
+- no aggregate/table/remote functions
+- no embedded python functions
 - no default arguments
+- upstream dbt-core still only parses function resources from `.sql` and `.py`, so JavaScript uses adapter config rather than native `.js` resources
 
 See [docs/functions.md](docs/functions.md) for the full first-version contract and example layout.
 
