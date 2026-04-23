@@ -81,6 +81,10 @@ Current contract:
 - supported:
   - SQL scalar functions
   - JavaScript scalar functions via `functions/*.sql` plus `config.language: javascript`
+  - external Python scalar functions via `functions/*.sql` plus `config.language: python`
+    - with `config.link: http://host:port`
+    - optional `config.remote_name`
+    - optional `config.always_retry_on_network_error`
 - materialization: `CREATE FUNCTION IF NOT EXISTS`
 - JavaScript async options:
   - `config.async: true` -> `WITH (async = true)`
@@ -95,10 +99,9 @@ Current limits:
 
 - no replace/update path for an existing function body
 - no overload-family management
-- no aggregate/table/remote functions
-- no embedded python functions
+- no aggregate or table functions
 - no default arguments
-- upstream dbt-core still only parses function resources from `.sql` and `.py`, so JavaScript uses adapter config rather than native `.js` resources
+- upstream dbt-core function contracts do not yet map cleanly to RisingWave-native `.js` authoring or RisingWave external Python UDF authoring, so JavaScript and Python currently use adapter config on `functions/*.sql`
 
 See [docs/functions.md](docs/functions.md) for the full first-version contract and example layout.
 
@@ -164,7 +167,7 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 
 - [docs/README.md](docs/README.md): documentation index
 - [docs/configuration.md](docs/configuration.md): profile options, model configs, sink settings, and background DDL usage
-- [docs/functions.md](docs/functions.md): first-version SQL scalar function support and limitations
+- [docs/functions.md](docs/functions.md): first-version RisingWave scalar function support and limitations
 - [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md): zero-downtime rebuild behavior for materialized views and views
 
 ## dbt Run Behavior
