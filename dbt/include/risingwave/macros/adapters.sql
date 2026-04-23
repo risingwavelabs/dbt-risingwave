@@ -39,19 +39,39 @@
 
 {% macro risingwave__list_relations_without_caching(schema_relation) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
-    select
-    '{{ schema_relation.database }}' as database,
-    rw_relations.name as name,
-    rw_schemas.name as schema,
-    FIRST_VALUE(CASE WHEN relation_type = 'materialized view' THEN
-      'materialized_view'
-      else relation_type
-    END order by relation_type desc) AS type
-    from rw_relations join rw_schemas on schema_id=rw_schemas.id
-    where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
-    and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
-    AND rw_schemas.name = '{{ schema_relation.schema }}'
-    group by database, name, schema
+    with rw_schema_relations as (
+      select
+        '{{ schema_relation.database }}' as database,
+        rw_relations.name as name,
+        rw_schemas.name as schema,
+        case
+          when relation_type = 'materialized view' then 'materialized_view'
+          else relation_type
+        end as type
+      from rw_relations
+      join rw_schemas on schema_id = rw_schemas.id
+      where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
+        and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
+        and rw_schemas.name = '{{ schema_relation.schema }}'
+    ),
+    rw_schema_functions as (
+      select
+        '{{ schema_relation.database }}' as database,
+        rw_functions.name as name,
+        rw_schemas.name as schema,
+        'function' as type
+      from rw_functions
+      join rw_schemas on rw_functions.schema_id = rw_schemas.id
+      where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
+        and rw_schemas.name = '{{ schema_relation.schema }}'
+      group by database, name, schema
+      having count(*) = 1
+    )
+    select database, name, schema, type
+    from rw_schema_relations
+    union all
+    select database, name, schema, type
+    from rw_schema_functions
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
@@ -157,6 +177,8 @@
       drop source if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }} cascade
+    {% elif relation.type == 'function' %}
+      drop function if exists {{ relation }}
     {% endif %}
   {%- endcall %}
 {% endmacro %}

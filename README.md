@@ -72,6 +72,28 @@ See [docs/configuration.md](docs/configuration.md) for supported materialization
 
 See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for requirements, cleanup behavior, and helper commands.
 
+### Functions
+
+`dbt-risingwave` now supports a first version of dbt `function` resources for RisingWave SQL scalar UDFs.
+
+Current contract:
+
+- supported: SQL scalar functions
+- materialization: `CREATE FUNCTION IF NOT EXISTS`
+- supported volatility config:
+  - `deterministic` -> `IMMUTABLE`
+  - `stable` -> `STABLE`
+  - `non-deterministic` -> `VOLATILE`
+
+Current limits:
+
+- no replace/update path for an existing function body
+- no overload-family management
+- no aggregate/table/remote/embedded python/javascript functions
+- no default arguments
+
+See [docs/functions.md](docs/functions.md) for the full first-version contract and example layout.
+
 ### Indexes
 
 RisingWave indexes support `INCLUDE` and `DISTRIBUTED BY` clauses beyond what the Postgres adapter exposes. Configure them in the model config:
@@ -134,6 +156,7 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 
 - [docs/README.md](docs/README.md): documentation index
 - [docs/configuration.md](docs/configuration.md): profile options, model configs, sink settings, and background DDL usage
+- [docs/functions.md](docs/functions.md): first-version SQL scalar function support and limitations
 - [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md): zero-downtime rebuild behavior for materialized views and views
 
 ## dbt Run Behavior
