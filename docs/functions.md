@@ -1,0 +1,92 @@
+# Functions
+
+`dbt-risingwave` supports the upstream dbt `function` resource for a constrained first version of RisingWave UDF support.
+
+## Scope
+
+This first version supports:
+
+- SQL scalar functions
+- function creation from dbt `functions/` resources
+- function references from models through `{{ function('name') }}(...)`
+- function volatility config:
+  - `deterministic` -> `IMMUTABLE`
+  - `stable` -> `STABLE`
+  - `non-deterministic` -> `VOLATILE`
+
+## Example
+
+Project layout:
+
+```text
+functions/
+  price_for_xlarge.sql
+  price_for_xlarge.yml
+models/
+  udf_example.sql
+```
+
+Function SQL:
+
+```sql
+select price * 2
+```
+
+Function YAML:
+
+```yaml
+functions:
+  - name: price_for_xlarge
+    description: Double the price
+    arguments:
+      - name: price
+        data_type: float
+    returns:
+      data_type: float
+```
+
+Model usage:
+
+```sql
+{{ config(materialized='view') }}
+
+select {{ function('price_for_xlarge') }}(100::float8) as xlarge_price
+```
+
+## First-Version Contract
+
+This adapter currently materializes SQL scalar functions with:
+
+```sql
+CREATE FUNCTION IF NOT EXISTS ...
+```
+
+That contract has two important consequences:
+
+1. dbt can create and reference the function.
+2. dbt does not replace or update an existing RisingWave function body.
+
+If the function definition changes, drop the function first or deploy it under a new name.
+
+## Current Limitations
+
+This first version does not support:
+
+- `CREATE OR REPLACE FUNCTION`
+- updating an existing function body through dbt
+- overload-family management
+- aggregate functions
+- table functions
+- remote or external UDFs
+- embedded `python` / `javascript` UDFs
+- default arguments
+
+The overload limitation is especially important. The adapter only treats a function name as a manageable dbt relation when that name maps to a single signature inside the schema.
+
+## Validation Example
+
+The live example and singular tests for this first version live in the companion project:
+
+- `dbt_rw_nexmark`
+
+See its function example for a runnable RisingWave validation flow.

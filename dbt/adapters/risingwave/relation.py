@@ -24,6 +24,7 @@ class RisingWaveRelationType(StrEnum):
     MaterializedView = "materialized_view"
     MaterializedView_v1_5_0 = "materializedview"
     External = "external"
+    Function = "function"
 
     Source = "source"
     Sink = "sink"
