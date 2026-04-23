@@ -44,17 +44,21 @@ class RisingWaveRelation(PostgresRelation):
         configured_language = model.get("config", {}).get("language")
         if configured_language and str(configured_language).lower() == "python":
             # dbt-core's native python function contract expects runtime_version and
-            # entry_point metadata, but RisingWave embedded Python UDFs do not use
-            # those fields. Provide adapter-local placeholders so we can still route
-            # the function to the python macro path.
+            # entry_point metadata, but RisingWave external Python UDFs do not use
+            # those fields directly. Provide adapter-local placeholders so we can
+            # still route the function to the python macro path while generating
+            # `AS ... USING LINK ...` SQL in the adapter macro.
+            remote_name = model.get("config", {}).get(
+                "remote_name", model.get("name")
+            )
             return FunctionConfig(
                 language="python",
                 type=model.get("config", {}).get("type", ""),
                 runtime_version=model.get("config", {}).get(
-                    "runtime_version", "embedded"
+                    "runtime_version", "external"
                 ),
                 entry_point=model.get("config", {}).get(
-                    "entry_point", model.get("name")
+                    "entry_point", remote_name
                 ),
             )
 
