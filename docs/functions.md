@@ -8,6 +8,8 @@ This first version supports:
 
 - SQL scalar functions
 - JavaScript scalar functions through `config.language: javascript`
+- Python scalar functions through `config.language: python`
+  - with `config.runtime_version: embedded`
 - JavaScript async options through adapter config:
   - `async`
   - `batch`
@@ -102,6 +104,50 @@ Model usage:
 select {{ function('price_for_xlarge_js') }}(100::float8) as xlarge_price
 ```
 
+### Python Scalar Function
+
+Project layout:
+
+```text
+functions/
+  price_for_xlarge_py.sql
+  price_for_xlarge_py.yml
+models/
+  py_udf_example.sql
+```
+
+Function file:
+
+```sql
+import math
+
+def price_for_xlarge_py(price):
+    return math.fsum([price, price])
+```
+
+Function YAML:
+
+```yaml
+functions:
+  - name: price_for_xlarge_py
+    config:
+      language: python
+      runtime_version: embedded
+    arguments:
+      - name: price
+        data_type: float8
+    returns:
+      data_type: float8
+```
+
+Model usage:
+
+```sql
+{{ config(materialized='view') }}
+
+select {{ function('price_for_xlarge_py') }}(100::float8) as xlarge_price
+```
+
 ## First-Version Contract
 
 This adapter currently materializes SQL scalar functions with:
@@ -126,6 +172,14 @@ CREATE FUNCTION IF NOT EXISTS ... LANGUAGE JAVASCRIPT AS $$ ... $$;
 The exported JavaScript function should match the dbt function name.
 
 This uses an adapter-level workaround for current dbt-core limits. Upstream dbt function parsing currently only accepts `.sql` and `.py` files, so JavaScript UDFs are authored in `functions/*.sql` and switched to JavaScript with `config.language: javascript`.
+
+For embedded Python, `dbt-core`'s native `python` function contract expects fields such as `runtime_version` and `entry_point`, which do not match RisingWave embedded Python UDF syntax. So this adapter currently uses the same pattern for Python and authors embedded Python UDFs in `functions/*.sql` with `config.language: python`.
+
+Current Python-specific contract:
+
+- set `config.language: python`
+- set `config.runtime_version: embedded`
+- you do not need to set `entry_point`; the adapter defaults it to the function name
 
 ### JavaScript Async Options
 
@@ -159,13 +213,15 @@ This first version does not support:
 - aggregate functions
 - table functions
 - remote or external UDFs
-- embedded `python` UDFs
 - default arguments
 - native `.js` function resources in dbt-core
+- native `.py` function resources for RisingWave embedded Python UDFs
 
 ## Cluster Requirement
 
 JavaScript UDF creation depends on RisingWave having embedded JavaScript UDF support enabled. If the cluster disables `enable_embedded_javascript_udf`, dbt function creation will fail at execution time.
+
+Embedded Python UDF creation also depends on RisingWave having `enable_embedded_python_udf = true`. If the cluster disables embedded Python UDFs, dbt function creation will fail at execution time.
 
 The overload limitation is especially important. The adapter only treats a function name as a manageable dbt relation when that name maps to a single signature inside the schema.
 

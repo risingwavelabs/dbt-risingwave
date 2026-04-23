@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 from typing import Optional, Type
 
+from dbt.adapters.base.relation import FunctionConfig
 from dbt.adapters.postgres.relation import PostgresRelation
 from dbt.adapters.utils import classproperty
 from dbt.adapters.relation_configs.config_base import RelationResults
@@ -40,15 +41,29 @@ class RisingWaveRelation(PostgresRelation):
         return RisingWaveRelationType
 
     def get_function_config(self, model):
+        configured_language = model.get("config", {}).get("language")
+        if configured_language and str(configured_language).lower() == "python":
+            # dbt-core's native python function contract expects runtime_version and
+            # entry_point metadata, but RisingWave embedded Python UDFs do not use
+            # those fields. Provide adapter-local placeholders so we can still route
+            # the function to the python macro path.
+            return FunctionConfig(
+                language="python",
+                type=model.get("config", {}).get("type", ""),
+                runtime_version=model.get("config", {}).get(
+                    "runtime_version", "embedded"
+                ),
+                entry_point=model.get("config", {}).get(
+                    "entry_point", model.get("name")
+                ),
+            )
+
         function_config = super().get_function_config(model)
         if function_config is None:
             return None
 
-        configured_language = model.get("config", {}).get("language")
         if configured_language:
-            return replace(
-                function_config, language=str(configured_language).lower()
-            )
+            return replace(function_config, language=str(configured_language).lower())
         return function_config
 
     # RisingWave has no limitation on relation name length.

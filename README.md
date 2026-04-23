@@ -81,6 +81,8 @@ Current contract:
 - supported:
   - SQL scalar functions
   - JavaScript scalar functions via `functions/*.sql` plus `config.language: javascript`
+  - Python scalar functions via `functions/*.sql` plus `config.language: python`
+    - with `config.runtime_version: embedded`
 - materialization: `CREATE FUNCTION IF NOT EXISTS`
 - JavaScript async options:
   - `config.async: true` -> `WITH (async = true)`
@@ -96,9 +98,8 @@ Current limits:
 - no replace/update path for an existing function body
 - no overload-family management
 - no aggregate/table/remote functions
-- no embedded python functions
 - no default arguments
-- upstream dbt-core still only parses function resources from `.sql` and `.py`, so JavaScript uses adapter config rather than native `.js` resources
+- upstream dbt-core function contracts do not yet map cleanly to RisingWave-native `.js` / embedded `.py` authoring, so JavaScript and Python currently use adapter config on `functions/*.sql`
 
 See [docs/functions.md](docs/functions.md) for the full first-version contract and example layout.
 
