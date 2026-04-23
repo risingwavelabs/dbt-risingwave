@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Type
 
 from dbt.adapters.postgres.relation import PostgresRelation
@@ -38,6 +38,18 @@ class RisingWaveRelation(PostgresRelation):
     @classproperty
     def get_relation_type(cls) -> Type[RisingWaveRelationType]:
         return RisingWaveRelationType
+
+    def get_function_config(self, model):
+        function_config = super().get_function_config(model)
+        if function_config is None:
+            return None
+
+        configured_language = model.get("config", {}).get("language")
+        if configured_language:
+            return replace(
+                function_config, language=str(configured_language).lower()
+            )
+        return function_config
 
     # RisingWave has no limitation on relation name length.
     # We set a relatively large value right now.
