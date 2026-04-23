@@ -82,6 +82,10 @@ Current contract:
   - SQL scalar functions
   - JavaScript scalar functions via `functions/*.sql` plus `config.language: javascript`
 - materialization: `CREATE FUNCTION IF NOT EXISTS`
+- JavaScript async options:
+  - `config.async: true` -> `WITH (async = true)`
+  - `config.batch: true` -> `WITH (batch = true)`
+  - `config.always_retry_on_network_error: true` -> `WITH (always_retry_on_network_error = true)`
 - supported volatility config:
   - `deterministic` -> `IMMUTABLE`
   - `stable` -> `STABLE`

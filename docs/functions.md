@@ -8,6 +8,10 @@ This first version supports:
 
 - SQL scalar functions
 - JavaScript scalar functions through `config.language: javascript`
+- JavaScript async options through adapter config:
+  - `async`
+  - `batch`
+  - `always_retry_on_network_error`
 - function creation from dbt `functions/` resources
 - function references from models through `{{ function('name') }}(...)`
 - function volatility config:
@@ -122,6 +126,28 @@ CREATE FUNCTION IF NOT EXISTS ... LANGUAGE JAVASCRIPT AS $$ ... $$;
 The exported JavaScript function should match the dbt function name.
 
 This uses an adapter-level workaround for current dbt-core limits. Upstream dbt function parsing currently only accepts `.sql` and `.py` files, so JavaScript UDFs are authored in `functions/*.sql` and switched to JavaScript with `config.language: javascript`.
+
+### JavaScript Async Options
+
+For embedded JavaScript scalar UDFs, the adapter also maps these function configs into RisingWave `WITH (...)` options:
+
+```yaml
+functions:
+  - name: http_get_todo_name_js
+    config:
+      language: javascript
+      async: true
+      batch: false
+      always_retry_on_network_error: false
+```
+
+Current mapping:
+
+- `config.async: true` -> `WITH (async = true)`
+- `config.batch: true` -> `WITH (batch = true)`
+- `config.always_retry_on_network_error: true` -> `WITH (always_retry_on_network_error = true)`
+
+This is enough to support real async `fetch(...)` use cases such as HTTP GET and POST.
 
 ## Current Limitations
 
