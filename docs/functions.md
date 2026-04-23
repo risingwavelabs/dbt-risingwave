@@ -7,6 +7,11 @@
 This first version supports:
 
 - SQL scalar functions
+- JavaScript scalar functions through `config.language: javascript`
+- JavaScript async options through adapter config:
+  - `async`
+  - `batch`
+  - `always_retry_on_network_error`
 - function creation from dbt `functions/` resources
 - function references from models through `{{ function('name') }}(...)`
 - function volatility config:
@@ -15,6 +20,8 @@ This first version supports:
   - `non-deterministic` -> `VOLATILE`
 
 ## Example
+
+### SQL Scalar Function
 
 Project layout:
 
@@ -53,6 +60,48 @@ Model usage:
 select {{ function('price_for_xlarge') }}(100::float8) as xlarge_price
 ```
 
+### JavaScript Scalar Function
+
+Project layout:
+
+```text
+functions/
+  price_for_xlarge_js.sql
+  price_for_xlarge_js.yml
+models/
+  js_udf_example.sql
+```
+
+Function file:
+
+```sql
+export function price_for_xlarge_js(price) {
+    return price * 2;
+}
+```
+
+Function YAML:
+
+```yaml
+functions:
+  - name: price_for_xlarge_js
+    config:
+      language: javascript
+    arguments:
+      - name: price
+        data_type: float8
+    returns:
+      data_type: float8
+```
+
+Model usage:
+
+```sql
+{{ config(materialized='view') }}
+
+select {{ function('price_for_xlarge_js') }}(100::float8) as xlarge_price
+```
+
 ## First-Version Contract
 
 This adapter currently materializes SQL scalar functions with:
@@ -68,6 +117,38 @@ That contract has two important consequences:
 
 If the function definition changes, drop the function first or deploy it under a new name.
 
+For JavaScript, the function body is emitted as:
+
+```sql
+CREATE FUNCTION IF NOT EXISTS ... LANGUAGE JAVASCRIPT AS $$ ... $$;
+```
+
+The exported JavaScript function should match the dbt function name.
+
+This uses an adapter-level workaround for current dbt-core limits. Upstream dbt function parsing currently only accepts `.sql` and `.py` files, so JavaScript UDFs are authored in `functions/*.sql` and switched to JavaScript with `config.language: javascript`.
+
+### JavaScript Async Options
+
+For embedded JavaScript scalar UDFs, the adapter also maps these function configs into RisingWave `WITH (...)` options:
+
+```yaml
+functions:
+  - name: http_get_todo_name_js
+    config:
+      language: javascript
+      async: true
+      batch: false
+      always_retry_on_network_error: false
+```
+
+Current mapping:
+
+- `config.async: true` -> `WITH (async = true)`
+- `config.batch: true` -> `WITH (batch = true)`
+- `config.always_retry_on_network_error: true` -> `WITH (always_retry_on_network_error = true)`
+
+This is enough to support real async `fetch(...)` use cases such as HTTP GET and POST.
+
 ## Current Limitations
 
 This first version does not support:
@@ -78,8 +159,13 @@ This first version does not support:
 - aggregate functions
 - table functions
 - remote or external UDFs
-- embedded `python` / `javascript` UDFs
+- embedded `python` UDFs
 - default arguments
+- native `.js` function resources in dbt-core
+
+## Cluster Requirement
+
+JavaScript UDF creation depends on RisingWave having embedded JavaScript UDF support enabled. If the cluster disables `enable_embedded_javascript_udf`, dbt function creation will fail at execution time.
 
 The overload limitation is especially important. The adapter only treats a function name as a manageable dbt relation when that name maps to a single signature inside the schema.
 
