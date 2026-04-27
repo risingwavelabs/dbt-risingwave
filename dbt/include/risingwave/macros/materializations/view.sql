@@ -6,6 +6,7 @@
                                                 database=database,
                                                 type='view') -%}
   {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
+  {%- set grant_config = config.get('grants') -%}
 
   {# Check both model config AND command line flag for zero downtime #}
   {%- set zero_downtime_config = config.get('zero_downtime', {}) -%}
@@ -20,6 +21,8 @@
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+  {{ risingwave__ensure_schema_authorization(target_relation) }}
 
   {% if old_relation is none %}
     {# First time creation #}
@@ -71,6 +74,9 @@
       {{ risingwave__handle_on_configuration_change(old_relation, target_relation) }}
     {% endif %}
   {% endif %}
+
+  {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=full_refresh_mode) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}
 

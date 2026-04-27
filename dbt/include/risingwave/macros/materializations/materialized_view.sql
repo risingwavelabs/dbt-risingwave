@@ -22,6 +22,8 @@
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
+  {{ risingwave__ensure_schema_authorization(target_relation) }}
+
   {% if old_relation is none %}
     {# First time creation #}
     {% call statement('main') -%}
