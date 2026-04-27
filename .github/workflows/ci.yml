@@ -616,11 +616,15 @@ jobs:
 
   test-grants-docs-schema:
     runs-on: ubuntu-latest
+    env:
+      DBT_RW_SCHEMA_REGISTRY_URL: http://host.docker.internal:18081
     services:
       risingwave:
         image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
         ports:
           - 4566:4566
+        options: >-
+          --add-host=host.docker.internal:host-gateway
 
     steps:
     - uses: actions/checkout@v3
@@ -640,6 +644,7 @@ jobs:
               pass: ""
               dbname: dev
               port: 4566
+              schema: dbt_e2e_grants_docs_schema
               schema: dbt_e2e_grants_docs_schema
           target: dev
         EOF
@@ -665,3 +670,53 @@ jobs:
     - name: dbt-doc
       run: dbt docs generate
       working-directory: tests/e2e/grants_docs_schema
+
+  test-source-connection:
+    runs-on: ubuntu-latest
+    env:
+      DBT_RW_SCHEMA_REGISTRY_URL: http://host.docker.internal:18081
+    services:
+      risingwave:
+        image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        ports:
+          - 4566:4566
+        options: >-
+          --add-host=host.docker.internal:host-gateway
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Setup dbt profile
+      run: |
+        mkdir -p $HOME/.dbt && cat >> $HOME/.dbt/profiles.yml <<EOF
+        dbt_risingwave_source_connection:
+          outputs:
+            dev:
+              type: risingwave
+              host: 127.0.0.1
+              user: root
+              pass: ""
+              dbname: dev
+              port: 4566
+              schema: public
+          target: dev
+        EOF
+    - name: Install current adapter
+      run: python3 -m pip install .
+    - name: Wait for RisingWave to be ready
+      run: timeout 60 bash -c 'until nc -z 127.0.0.1 4566; do sleep 1; done'
+    - name: dbt-source-connection-e2e
+      run: |
+        python3 scripts/mock_schema_registry.py > /tmp/mock_schema_registry.log 2>&1 &
+        mock_schema_registry_pid=$!
+        trap 'kill $mock_schema_registry_pid >/dev/null 2>&1 || true' EXIT
+        timeout 30 bash -c 'until nc -z 127.0.0.1 18081; do sleep 1; done'
+        dbt run --full-refresh
+        dbt test
+        dbt run
+        dbt test
+        dbt docs generate
+      working-directory: tests/e2e/source_connection
