@@ -1,0 +1,22 @@
+name: dbt_risingwave_seeds_ephemeral_snapshots
+version: "1.0"
+config-version: 2
+
+profile: dbt_risingwave_seeds_ephemeral_snapshots
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+
+seeds:
+  dbt_risingwave_seeds_ephemeral_snapshots:
+    seed_users:
+      +column_types:
+        id: integer
+        name: varchar
+        status: varchar
+
+snapshots:
+  dbt_risingwave_seeds_ephemeral_snapshots:
+    +target_schema: "{{ target.schema }}"
