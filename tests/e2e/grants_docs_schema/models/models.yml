@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: docs_base_table
+    description: Table relation comment from persist_docs.
+    columns:
+      - name: id
+        description: Table id column comment from persist_docs.
+      - name: payload
+        description: Table payload column comment from persist_docs.
+
+  - name: docs_base_view
+    description: View relation comment from persist_docs.
+    columns:
+      - name: id
+        description: View id column comment from persist_docs.
+      - name: payload
+        description: View payload column comment from persist_docs.
+
+  - name: docs_base_mv
+    description: Materialized view relation comment from persist_docs.
+    columns:
+      - name: id
+        description: Materialized view id column comment from persist_docs.
+      - name: payload
+        description: Materialized view payload column comment from persist_docs.

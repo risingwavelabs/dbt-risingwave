@@ -112,6 +112,16 @@
   {%- endcall -%}
 {% endmacro %}
 
+{% macro risingwave__ensure_schema_authorization(relation) -%}
+  {%- set configured_owner = config.get("schema_authorization", none) -%}
+  {%- if configured_owner is not none and configured_owner | trim != "" -%}
+    {%- call statement('alter_schema_owner') -%}
+      alter schema {{ relation.without_identifier().include(database=False) }}
+      owner to {{ adapter.quote(configured_owner) }}
+    {%- endcall -%}
+  {%- endif -%}
+{% endmacro %}
+
 {% macro risingwave__get_columns_in_relation(relation) -%}
   {% call statement('get_columns_in_relation', fetch_result=True) %}
       select

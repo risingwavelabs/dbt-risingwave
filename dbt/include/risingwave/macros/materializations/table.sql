@@ -8,6 +8,7 @@
                                                 schema=schema,
                                                 database=database,
                                                 type='table') -%}
+  {%- set grant_config = config.get('grants') -%}
 
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
@@ -15,6 +16,8 @@
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+  {{ risingwave__ensure_schema_authorization(target_relation) }}
 
   {% if old_relation is none or (full_refresh_mode and old_relation) %}
     {% call statement('main') -%}
@@ -27,6 +30,9 @@
   {% else %}
     {{ risingwave__execute_no_op(target_relation) }}
   {% endif %}
+
+  {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=full_refresh_mode) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
   {% do persist_docs(target_relation, model) %}
 
