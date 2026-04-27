@@ -198,6 +198,60 @@ Supported values:
 | `continue` | Keep going and emit a warning. |
 | `fail` | Stop the run with an error. |
 
+### Additive Schema Evolution for `table_with_connector`
+
+`table_with_connector` normally runs the model's raw `CREATE TABLE ... WITH (...)` SQL only when the table does not exist, or when dbt is run with `--full-refresh`. If the table already exists, the adapter does not re-run the connector DDL because that can recreate external connector state.
+
+For additive table changes, the adapter supports a conservative `ALTER TABLE ADD COLUMN` path:
+
+```sql
+{{ config(
+    materialized='table_with_connector',
+    on_schema_change='append_new_columns',
+    additive_schema_evolution=[
+      {'name': 'source_ts', 'data_type': 'timestamp'},
+      {'name': 'score', 'data_type': 'double precision', 'default': '0.0'}
+    ]
+) }}
+
+CREATE TABLE {{ this }} (
+    id int,
+    payload jsonb,
+    source_ts timestamp,
+    score double precision
+) WITH (
+    appendonly = 'true'
+);
+```
+
+When the table already exists, dbt checks the configured `additive_schema_evolution` columns against RisingWave's catalog and runs one `ALTER TABLE ... ADD COLUMN` statement for each missing column.
+
+Supported values for `on_schema_change` on `table_with_connector`:
+
+| Value | Behavior |
+| --- | --- |
+| `ignore` | Default. Keep the existing table schema unchanged. |
+| `append_new_columns` | Add missing columns listed in `additive_schema_evolution`. |
+| `fail` | Fail if any column listed in `additive_schema_evolution` is missing. |
+| `sync_all_columns` | Not supported for `table_with_connector`. |
+
+Column entries support:
+
+| Key | Required | Description |
+| --- | --- | --- |
+| `name` | Yes | Column name. |
+| `data_type` | Yes | RisingWave SQL type used in `ALTER TABLE ADD COLUMN`. |
+| `default` | No | SQL expression emitted after `DEFAULT`. |
+| `not_null` | No | Emits `NOT NULL`. Must be used with `default`. |
+| `quote` | No | Quote the column identifier. |
+
+Limitations:
+
+- The adapter does not infer new columns from the raw `CREATE TABLE` SQL. Configure `additive_schema_evolution` explicitly.
+- Only additive columns are supported. Primary-key changes, generated columns, column drops, type changes, connector options, watermark clauses, and table properties are not changed.
+- Existing downstream materialized views and sinks continue running, but their output schemas do not automatically include newly added columns. Update downstream dbt models separately when they should consume the new column.
+- RisingWave does not support this path for webhook tables.
+
 ### Zero-Downtime Rebuilds
 
 `materialized_view` and `view` support swap-based zero-downtime rebuilds.

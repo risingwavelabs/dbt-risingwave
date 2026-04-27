@@ -387,6 +387,135 @@
     {% endif %}
 {% endmacro %}
 
+{% macro risingwave__validate_table_with_connector_on_schema_change(on_schema_change) %}
+  {% if on_schema_change is none %}
+    {{ return("ignore") }}
+  {% elif on_schema_change in ["ignore", "append_new_columns", "fail"] %}
+    {{ return(on_schema_change) }}
+  {% elif on_schema_change == "sync_all_columns" %}
+    {{ exceptions.raise_compiler_error("`table_with_connector` does not support `on_schema_change='sync_all_columns'`. Use `append_new_columns` for additive changes or run explicit RisingWave DDL for non-additive changes.") }}
+  {% else %}
+    {{ exceptions.raise_compiler_error("Invalid `on_schema_change` value for `table_with_connector`: " ~ on_schema_change) }}
+  {% endif %}
+{% endmacro %}
+
+{% macro risingwave__get_table_with_connector_additive_columns() %}
+  {% set additive_columns = config.get("additive_schema_evolution", none) %}
+
+  {# Alias in case users prefer a materialization-specific config name. #}
+  {% if additive_columns is none %}
+    {% set additive_columns = config.get("table_with_connector_add_columns", []) %}
+  {% endif %}
+
+  {% if additive_columns is mapping %}
+    {% set additive_columns = additive_columns.get("columns", []) %}
+  {% endif %}
+
+  {% if additive_columns is string %}
+    {{ exceptions.raise_compiler_error("`additive_schema_evolution` must be a list of column definitions, not a string.") }}
+  {% endif %}
+
+  {{ return(additive_columns) }}
+{% endmacro %}
+
+{% macro risingwave__render_table_with_connector_add_column(column_config) -%}
+  {% if column_config is not mapping %}
+    {{ exceptions.raise_compiler_error("Each `additive_schema_evolution` entry must be a dictionary with `name` and `data_type`.") }}
+  {% endif %}
+
+  {% set column_name = column_config.get("name", none) %}
+  {% set data_type = column_config.get("data_type", column_config.get("type", none)) %}
+  {% set default_expr = column_config.get("default", none) %}
+  {% set not_null = column_config.get("not_null", false) %}
+
+  {% if column_name is none or column_name | trim == "" %}
+    {{ exceptions.raise_compiler_error("Each `additive_schema_evolution` entry must include a non-empty `name`.") }}
+  {% endif %}
+
+  {% if data_type is none or data_type | trim == "" %}
+    {{ exceptions.raise_compiler_error("`additive_schema_evolution` column `" ~ column_name ~ "` must include `data_type`.") }}
+  {% endif %}
+
+  {% if column_config.get("primary_key", false) %}
+    {{ exceptions.raise_compiler_error("`table_with_connector` additive schema evolution cannot add primary-key columns: " ~ column_name) }}
+  {% endif %}
+
+  {% if column_config.get("generated", false) %}
+    {{ exceptions.raise_compiler_error("`table_with_connector` additive schema evolution cannot add generated columns: " ~ column_name) }}
+  {% endif %}
+
+  {% if not_null and default_expr is none %}
+    {{ exceptions.raise_compiler_error("`table_with_connector` additive schema evolution cannot add NOT NULL column `" ~ column_name ~ "` without a DEFAULT expression.") }}
+  {% endif %}
+
+  {%- if column_config.get("quote", false) -%}
+    {{ adapter.quote(column_name) }}
+  {%- else -%}
+    {{ column_name }}
+  {%- endif -%}
+  {{ " " ~ data_type }}
+  {%- if default_expr is not none %} default {{ default_expr }}{% endif -%}
+  {%- if not_null %} not null{% endif -%}
+{%- endmacro %}
+
+{% macro risingwave__table_with_connector_missing_additive_columns(target_relation, additive_columns) %}
+  {% set existing_column_names = [] %}
+  {% for existing_column in adapter.get_columns_in_relation(target_relation) %}
+    {% do existing_column_names.append(existing_column.name | lower) %}
+  {% endfor %}
+
+  {% set missing_columns = [] %}
+  {% for column_config in additive_columns %}
+    {% if column_config is not mapping %}
+      {{ exceptions.raise_compiler_error("Each `additive_schema_evolution` entry must be a dictionary with `name` and `data_type`.") }}
+    {% endif %}
+
+    {% set column_name = column_config.get("name", none) %}
+    {% if column_name is none or column_name | trim == "" %}
+      {{ exceptions.raise_compiler_error("Each `additive_schema_evolution` entry must include a non-empty `name`.") }}
+    {% endif %}
+
+    {% if column_name | lower not in existing_column_names %}
+      {% do missing_columns.append(column_config) %}
+    {% endif %}
+  {% endfor %}
+
+  {{ return(missing_columns) }}
+{% endmacro %}
+
+{% macro risingwave__handle_table_with_connector_on_schema_change(target_relation) %}
+  {% set on_schema_change = risingwave__validate_table_with_connector_on_schema_change(config.get("on_schema_change", "ignore")) %}
+
+  {% if on_schema_change == "ignore" %}
+    {{ return(false) }}
+  {% endif %}
+
+  {% set additive_columns = risingwave__get_table_with_connector_additive_columns() %}
+
+  {% if additive_columns | length == 0 %}
+    {% if on_schema_change == "append_new_columns" %}
+      {{ exceptions.warn("`table_with_connector` cannot infer new columns from raw CREATE TABLE SQL. Configure `additive_schema_evolution` to enable additive schema evolution.") }}
+    {% endif %}
+    {{ return(false) }}
+  {% endif %}
+
+  {% set missing_columns = risingwave__table_with_connector_missing_additive_columns(target_relation, additive_columns) %}
+
+  {% if missing_columns | length == 0 %}
+    {{ return(false) }}
+  {% elif on_schema_change == "fail" %}
+    {% set missing_column_names = missing_columns | map(attribute="name") | join(", ") %}
+    {{ exceptions.raise_compiler_error("`table_with_connector` schema changes detected for " ~ target_relation ~ ": missing columns [" ~ missing_column_names ~ "]. Set `on_schema_change='append_new_columns'` to apply additive changes.") }}
+  {% elif on_schema_change == "append_new_columns" %}
+    {% call statement('table_with_connector_add_columns') -%}
+      {% for column_config in missing_columns %}
+        alter table {{ target_relation }} add column {{ risingwave__render_table_with_connector_add_column(column_config) }};
+      {% endfor %}
+    {%- endcall %}
+    {{ return(true) }}
+  {% endif %}
+{% endmacro %}
+
 {% macro risingwave__truncate_relation(relation) -%}
   {% call statement('truncate_relation') -%}
     delete from {{ relation }}
