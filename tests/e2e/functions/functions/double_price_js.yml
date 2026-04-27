@@ -1,0 +1,10 @@
+functions:
+  - name: double_price_js
+    description: Double an input price with an embedded JavaScript function.
+    config:
+      language: javascript
+    arguments:
+      - name: price
+        data_type: float8
+    returns:
+      data_type: float8

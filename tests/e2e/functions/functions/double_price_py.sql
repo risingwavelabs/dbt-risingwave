@@ -1,0 +1,2 @@
+-- External Python UDF served by scripts/python_udf_server.py.
+-- The function body is unused by RisingWave external UDFs.

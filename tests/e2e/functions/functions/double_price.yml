@@ -1,0 +1,8 @@
+functions:
+  - name: double_price
+    description: Double an input price with a SQL scalar function.
+    arguments:
+      - name: price
+        data_type: float8
+    returns:
+      data_type: float8

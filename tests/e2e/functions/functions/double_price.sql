@@ -1,0 +1,1 @@
+select price * 2

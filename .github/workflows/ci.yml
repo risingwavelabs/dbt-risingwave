@@ -551,3 +551,65 @@ jobs:
       working-directory: tests/e2e/zero_downtime
       env:
         DBT_RW_ZERO_DOWNTIME_STAGE: changed
+
+  test-functions:
+    runs-on: ubuntu-latest
+    services:
+      risingwave:
+        image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        ports:
+          - 4566:4566
+        options: >-
+          --add-host=host.docker.internal:host-gateway
+
+    env:
+      JS_UDF_HTTP_BIND_HOST: 0.0.0.0
+      JS_UDF_HTTP_BASE_URL: http://host.docker.internal:18080
+      PY_UDF_SERVER_BIND_HOST: 0.0.0.0
+      PY_UDF_SERVER_URL: http://host.docker.internal:8815
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Setup dbt profile
+      run: |
+        mkdir -p $HOME/.dbt && cat >> $HOME/.dbt/profiles.yml <<EOF
+        dbt_risingwave_functions:
+          outputs:
+            dev:
+              type: risingwave
+              host: 127.0.0.1
+              user: root
+              pass: ""
+              dbname: dev
+              port: 4566
+              schema: public
+          target: dev
+        EOF
+    - name: Install current adapter
+      run: |
+        python3 -m pip install .
+        python3 -m pip install -r tests/e2e/functions/scripts/python_udf_server_requirements.txt
+    - name: Start UDF mock servers
+      run: |
+        python3 tests/e2e/functions/scripts/js_udf_http_server.py > /tmp/js_udf_http_server.log 2>&1 &
+        python3 tests/e2e/functions/scripts/python_udf_server.py > /tmp/python_udf_server.log 2>&1 &
+        timeout 30 bash -c 'until nc -z 127.0.0.1 18080; do sleep 1; done'
+        timeout 30 bash -c 'until nc -z 127.0.0.1 8815; do sleep 1; done'
+    - name: Wait for RisingWave to be ready
+      run: timeout 60 bash -c 'until nc -z 127.0.0.1 4566; do sleep 1; done'
+    - name: dbt-build
+      run: dbt build
+      working-directory: tests/e2e/functions
+    - name: dbt-run-existing-functions
+      run: dbt run
+      working-directory: tests/e2e/functions
+    - name: dbt-test-existing-functions
+      run: dbt test
+      working-directory: tests/e2e/functions
+    - name: dbt-doc
+      run: dbt docs generate
+      working-directory: tests/e2e/functions
