@@ -1,0 +1,9 @@
+name: dbt_risingwave_store_failures
+version: "1.0"
+config-version: 2
+
+profile: dbt_risingwave_store_failures
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
