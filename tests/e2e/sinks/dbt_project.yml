@@ -1,0 +1,8 @@
+name: dbt_risingwave_sinks
+version: "1.0"
+config-version: 2
+
+profile: dbt_risingwave_sinks
+
+model-paths: ["models"]
+test-paths: ["tests"]
