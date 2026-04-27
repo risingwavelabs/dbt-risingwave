@@ -1,0 +1,9 @@
+name: dbt_risingwave_functions
+version: "1.0"
+config-version: 2
+
+profile: dbt_risingwave_functions
+
+model-paths: ["models"]
+test-paths: ["tests"]
+function-paths: ["functions"]

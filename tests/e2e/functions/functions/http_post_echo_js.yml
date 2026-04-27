@@ -1,0 +1,13 @@
+functions:
+  - name: http_post_echo_js
+    description: Send payloads over HTTP POST from an async JavaScript function.
+    config:
+      language: javascript
+      async: true
+    arguments:
+      - name: prefix
+        data_type: varchar
+      - name: value
+        data_type: varchar
+    returns:
+      data_type: varchar
