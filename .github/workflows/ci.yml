@@ -110,3 +110,30 @@ jobs:
     - name: dbt-doc
       run: dbt docs generate
       working-directory: dbt_rw_nexmark
+
+  test-adapter-functional:
+    runs-on: ubuntu-latest
+    services:
+      risingwave:
+        image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        ports:
+          - 4566:4566
+
+    env:
+      DBT_HOST: 127.0.0.1
+      DBT_PORT: 4566
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Install current adapter and test dependencies
+      run: |
+        python3 -m pip install .
+        python3 -m pip install pytest pytest-dotenv dbt-tests-adapter~=1.11.0
+    - name: Wait for RisingWave to be ready
+      run: timeout 60 bash -c 'until nc -z 127.0.0.1 4566; do sleep 1; done'
+    - name: Run adapter functional tests
+      run: python3 -m pytest tests/functional/adapter/test_table_with_connector_schema_evolution.py -q
