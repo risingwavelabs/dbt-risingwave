@@ -76,6 +76,21 @@
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
 
+{% macro risingwave__get_relation_without_caching(relation) %}
+  {% set catalog_relations = risingwave__list_relations_without_caching(relation) %}
+  {% for catalog_relation in catalog_relations %}
+    {% if catalog_relation[1] == relation.identifier %}
+      {{ return(api.Relation.create(
+          database=catalog_relation[0],
+          identifier=catalog_relation[1],
+          schema=catalog_relation[2],
+          type=catalog_relation[3]
+      )) }}
+    {% endif %}
+  {% endfor %}
+  {{ return(none) }}
+{% endmacro %}
+
 {% macro risingwave__create_schema(relation) -%}
   {% if relation.database -%}
     {{ adapter.verify_database(relation.database) }}
