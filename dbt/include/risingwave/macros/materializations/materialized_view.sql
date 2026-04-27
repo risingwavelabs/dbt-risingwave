@@ -1,13 +1,11 @@
 {% materialization materialized_view, adapter='risingwave' %}
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = should_full_refresh() -%}
-  {%- set old_relation = adapter.get_relation(identifier=identifier,
-                                              schema=schema,
-                                              database=database) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,
                                                 type='materialized_view') -%}
+  {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
 
   {%- set grant_config = config.get('grants') -%}
   {# Check both model config AND command line flag for zero downtime #}
