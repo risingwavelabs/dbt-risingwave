@@ -616,11 +616,15 @@ jobs:
 
   test-grants-docs-schema:
     runs-on: ubuntu-latest
+    env:
+      DBT_RW_SCHEMA_REGISTRY_URL: http://host.docker.internal:18081
     services:
       risingwave:
         image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
         ports:
           - 4566:4566
+        options: >-
+          --add-host=host.docker.internal:host-gateway
 
     steps:
     - uses: actions/checkout@v3
