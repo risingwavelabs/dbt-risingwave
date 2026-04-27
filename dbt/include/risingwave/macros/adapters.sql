@@ -139,7 +139,7 @@
 {% endmacro %}
 
 {% macro risingwave__get_create_index_sql(relation, index_dict) -%}
-  {%- set index_config = adapter.parse_index(index_dict) -%}
+  {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
   {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
   {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
 
