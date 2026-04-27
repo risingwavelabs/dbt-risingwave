@@ -10,6 +10,18 @@ where not exists (
 
 union all
 
+select 'base_view must be a view' as failure
+where not exists (
+    select 1
+    from rw_relations
+    join rw_schemas on schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ target.schema }}'
+      and rw_relations.name = 'base_view'
+      and rw_relations.relation_type = 'view'
+)
+
+union all
+
 select 'events_mv must be a materialized view' as failure
 where not exists (
     select 1
@@ -43,6 +55,27 @@ where not exists (
 
 union all
 
+select 'base_view has unexpected row count' as failure
+where (select count(*) from {{ ref('base_view') }}) != 2
+
+union all
+
+select 'base_view missing alpha row' as failure
+where not exists (
+    select 1 from {{ ref('base_view') }}
+    where id = 1 and payload = 'alpha_view'
+)
+
+union all
+
+select 'base_view missing beta row' as failure
+where not exists (
+    select 1 from {{ ref('base_view') }}
+    where id = 2 and payload = 'beta_view'
+)
+
+union all
+
 select 'events_mv has unexpected row count' as failure
 where (select count(*) from {{ ref('events_mv') }}) != 2
 
@@ -51,7 +84,7 @@ union all
 select 'events_mv missing alpha row' as failure
 where not exists (
     select 1 from {{ ref('events_mv') }}
-    where id = 1 and payload = 'alpha_mv'
+    where id = 1 and payload = 'alpha_view_mv'
 )
 
 union all
@@ -59,5 +92,5 @@ union all
 select 'events_mv missing beta row' as failure
 where not exists (
     select 1 from {{ ref('events_mv') }}
-    where id = 2 and payload = 'beta_mv'
+    where id = 2 and payload = 'beta_view_mv'
 )
