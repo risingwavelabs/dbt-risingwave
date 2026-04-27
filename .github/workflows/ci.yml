@@ -537,7 +537,7 @@ jobs:
       env:
         DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: initial
     - name: dbt-run-zero-downtime-swap
-      run: dbt run --vars '{zero_downtime: true}'
+      run: "dbt run --vars '{zero_downtime: true}'"
       working-directory: tests/e2e/zero_downtime
       env:
         DBT_RW_ZERO_DOWNTIME_STAGE: changed
