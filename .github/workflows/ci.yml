@@ -1,6 +1,9 @@
 name: Test dbt-risingwave
 
-on: [push]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   test-with-jaffle_shop:
