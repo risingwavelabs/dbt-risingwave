@@ -51,7 +51,7 @@
       from rw_relations
       join rw_schemas on schema_id = rw_schemas.id
       where rw_schemas.name not in ('rw_catalog', 'information_schema', 'pg_catalog')
-        and relation_type in ('table', 'view', 'source', 'sink', 'materialized view', 'index')
+        and relation_type in ('table', 'view', 'source', 'sink', 'subscription', 'materialized view', 'index')
         and rw_schemas.name = '{{ schema_relation.schema }}'
     ),
     rw_schema_functions as (
@@ -202,6 +202,8 @@
       drop source if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }} cascade
+    {% elif relation.type == 'subscription' %}
+      drop subscription if exists {{ relation }} cascade
     {% elif relation.type == 'function' %}
       drop function if exists {{ relation }}
     {% endif %}
@@ -294,10 +296,36 @@
     ;
 {%- endmacro %}
 
+{% macro risingwave__create_subscription(relation, sql) -%}
+    {{ risingwave__render_sql_header() }}
+
+    {%- set from_relation = sql | trim -%}
+    {%- if from_relation == "" -%}
+      {{ exceptions.raise_compiler_error("`subscription` materialization requires model SQL that renders to a relation, for example a ref() or source() call.") }}
+    {%- endif -%}
+    {%- set retention = config.get("retention", "1D") -%}
+    {%- set subscription_options = config.get("subscription_options", {}) -%}
+    {%- if subscription_options is none -%}
+      {%- set subscription_options = {} -%}
+    {%- endif -%}
+    {%- if subscription_options is not mapping -%}
+      {{ exceptions.raise_compiler_error("`subscription_options` must be a dictionary of RisingWave CREATE SUBSCRIPTION WITH options.") }}
+    {%- endif -%}
+
+    create subscription if not exists {{ relation }}
+    from {{ from_relation }}
+    with (
+      retention = '{{ retention }}'
+      {%- for key, value in subscription_options.items() -%}
+        , {{ key }} = '{{ value }}'
+      {%- endfor -%}
+    );
+{%- endmacro %}
+
 {% macro risingwave__run_sql(sql) -%}
   {% set contract_config = config.get('contract') %}
   {% if contract_config.enforced %}
-    {{exceptions.warn("Model contracts cannot be enforced for source, table_with_connector and sink")}}
+    {{exceptions.warn("Model contracts cannot be enforced for source, table_with_connector, sink and subscription")}}
   {%- endif %}
   {{ risingwave__render_sql_header() }}
   {{ sql }};

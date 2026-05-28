@@ -160,8 +160,9 @@ from {{ ref('events') }}
 | `source` | Runs a full `CREATE SOURCE` statement supplied by the model SQL. |
 | `table_with_connector` | Runs a full `CREATE TABLE ... WITH (...)` statement supplied by the model SQL. Supports explicit additive `ALTER TABLE ADD COLUMN` changes through `on_schema_change='append_new_columns'`. |
 | `sink` | Creates a sink, either from adapter configs or from a full SQL statement. |
+| `subscription` | Creates a RisingWave subscription from a relation rendered by the model SQL, usually `ref()`. This is useful for maintaining the upstream log store needed by cross-database materialized views. |
 
-See [docs/configuration.md](docs/configuration.md) for adapter-specific configuration examples, including streaming session settings and background DDL.
+See [docs/configuration.md](docs/configuration.md) for adapter-specific configuration examples, including streaming session settings, background DDL, sinks, and subscriptions.
 
 ## Documentation
 

@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: upstream
+    database: dev
+    schema: public
+    tables:
+      - name: subscription_events

@@ -4,7 +4,7 @@ This directory contains the adapter-specific documentation that used to be mixed
 
 ## Guides
 
-- [configuration.md](configuration.md): profile settings, model configuration, and sink options
+- [configuration.md](configuration.md): profile settings, model configuration, sink options, and subscriptions
 - [functions.md](functions.md): first-version RisingWave function support and its limits
 - [zero-downtime-rebuilds.md](zero-downtime-rebuilds.md): zero-downtime rebuild flow for materialized views and views
 

@@ -30,6 +30,7 @@ class RisingWaveRelationType(StrEnum):
     Source = "source"
     Sink = "sink"
     Connection = "connection"
+    Subscription = "subscription"
 
 
 @dataclass(frozen=True, eq=False, repr=False)
