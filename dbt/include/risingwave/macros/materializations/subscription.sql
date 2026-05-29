@@ -1,0 +1,31 @@
+{% materialization subscription, adapter = "risingwave" %}
+    {%- set identifier = model["alias"] -%}
+    {%- set full_refresh_mode = should_full_refresh() -%}
+    {%- set target_relation = api.Relation.create(
+        identifier=identifier,
+        schema=schema,
+        database=database,
+        type="subscription",
+    ) -%}
+    {%- if target_relation.database -%}
+        {{ adapter.verify_database(target_relation.database) }}
+    {%- endif -%}
+    {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
+
+    {% if full_refresh_mode and old_relation %} {{ adapter.drop_relation(old_relation) }} {% endif %}
+
+    {{ run_hooks(pre_hooks, inside_transaction=False) }}
+    {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
+    {% if old_relation is none or (full_refresh_mode and old_relation) %}
+        {% call statement("main") -%}
+            {{ risingwave__create_subscription(target_relation, sql) }}
+        {%- endcall %}
+    {% else %} {{ risingwave__execute_no_op(target_relation) }}
+    {% endif %}
+
+    {{ run_hooks(post_hooks, inside_transaction=False) }}
+    {{ run_hooks(post_hooks, inside_transaction=True) }}
+
+    {{ return({"relations": [target_relation]}) }}
+{% endmaterialization %}

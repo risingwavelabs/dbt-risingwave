@@ -175,6 +175,51 @@ Caveat:
 
 - RisingWave `WAIT` waits for all background creating jobs, not only the job started by the current dbt model. If other background DDL is running in the same cluster, the dbt node may wait on that work too.
 
+### Subscriptions for Cross-Database MVs
+
+Use `materialized='subscription'` to create a RisingWave subscription in the active dbt target database. This is useful for keeping the upstream log store available for cross-database materialized views managed from another target database.
+
+In the upstream dbt project, create the table or materialized view and a subscription model that references it with `ref()`:
+
+```sql
+{{ config(
+    materialized='subscription',
+    retention='1D'
+) }}
+
+{{ ref('events') }}
+```
+
+The subscription model SQL must render to the table or materialized view being subscribed. Prefer `ref()` so dbt records the dependency and builds the upstream relation first.
+
+In the downstream dbt project, declare the upstream relation as a dbt source so the cross-database reference is tracked in lineage and can vary by environment:
+
+```yaml
+sources:
+  - name: upstream
+    database: upstream_db
+    schema: public
+    tables:
+      - name: events
+```
+
+Then create the downstream materialized view from a dbt target connected to the downstream database:
+
+```sql
+select *
+from {{ source('upstream', 'events') }}
+```
+
+The materialization accepts:
+
+| Option | Description |
+| --- | --- |
+| `schema` | Standard dbt model schema. The subscription is created in this schema. Defaults to the active target schema. |
+| `retention` | Retention value for `WITH (retention = ...)`. Defaults to `1D`. |
+| `subscription_options` | Extra `WITH` options rendered as `key = 'value'`. |
+
+The subscription materialization intentionally does not switch databases. RisingWave creates subscriptions in the current database, so the correct ownership model is to run subscription models with an upstream dbt target/profile and run downstream cross-database MVs with a downstream target/profile. Use dbt's standard `schema` model config when the subscription should live outside the target schema.
+
 ### Index Configuration Changes
 
 `materialized_view`, `table`, and `table_with_connector` support dbt's `on_configuration_change` behavior for index changes.
