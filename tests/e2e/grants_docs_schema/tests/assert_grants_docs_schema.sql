@@ -15,7 +15,15 @@ target_relations as (
         rw_relations.acl
     from rw_catalog.rw_relations
     join target_schema on rw_relations.schema_id = target_schema.id
-    where rw_relations.name in ('docs_base_table', 'docs_base_view', 'docs_base_mv')
+    where rw_relations.name in (
+        'docs_base_table',
+        'docs_base_view',
+        'docs_base_mv',
+        'docs_connector_table',
+        'docs_datagen_source',
+        'docs_blackhole_sink',
+        'docs_base_subscription'
+    )
 ),
 relation_comments as (
     select
@@ -77,6 +85,46 @@ where not exists (
 
 union all
 
+select 'docs_connector_table must be a table' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_connector_table'
+      and relation_type = 'table'
+)
+
+union all
+
+select 'docs_datagen_source must be a source' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_datagen_source'
+      and relation_type = 'source'
+)
+
+union all
+
+select 'docs_blackhole_sink must be a sink' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_blackhole_sink'
+      and relation_type = 'sink'
+)
+
+union all
+
+select 'docs_base_subscription must be a subscription' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_base_subscription'
+      and relation_type = 'subscription'
+)
+
+union all
+
 select 'docs_base_table grant missing' as failure
 where not exists (
     select 1
@@ -102,6 +150,46 @@ where not exists (
     select 1
     from target_relations
     where name = 'docs_base_mv'
+      and array_to_string(acl, ',') like '%dbt_e2e_gds_grantee=r/%'
+)
+
+union all
+
+select 'docs_connector_table grant missing' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_connector_table'
+      and array_to_string(acl, ',') like '%dbt_e2e_gds_grantee=r/%'
+)
+
+union all
+
+select 'docs_datagen_source grant missing' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_datagen_source'
+      and array_to_string(acl, ',') like '%dbt_e2e_gds_grantee=r/%'
+)
+
+union all
+
+select 'docs_blackhole_sink grant missing' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_blackhole_sink'
+      and array_to_string(acl, ',') like '%dbt_e2e_gds_grantee=r/%'
+)
+
+union all
+
+select 'docs_base_subscription grant missing' as failure
+where not exists (
+    select 1
+    from target_relations
+    where name = 'docs_base_subscription'
       and array_to_string(acl, ',') like '%dbt_e2e_gds_grantee=r/%'
 )
 

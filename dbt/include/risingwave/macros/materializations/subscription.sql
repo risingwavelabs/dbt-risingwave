@@ -11,6 +11,7 @@
         {{ adapter.verify_database(target_relation.database) }}
     {%- endif -%}
     {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
+    {%- set grant_config = config.get("grants") -%}
 
     {% if full_refresh_mode and old_relation %} {{ adapter.drop_relation(old_relation) }} {% endif %}
 
@@ -23,6 +24,9 @@
         {%- endcall %}
     {% else %} {{ risingwave__execute_no_op(target_relation) }}
     {% endif %}
+
+    {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=full_refresh_mode) %}
+    {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
     {{ run_hooks(post_hooks, inside_transaction=False) }}
     {{ run_hooks(post_hooks, inside_transaction=True) }}

@@ -20,6 +20,15 @@ def test_connector_materializations_use_catalog_relation_lookup():
         assert "adapter.get_relation" not in materialization
 
 
+def test_connector_materializations_apply_grants():
+    for filename in ("table_with_connector.sql", "sink.sql", "source.sql", "subscription.sql"):
+        materialization = (MATERIALIZATION_DIR / filename).read_text()
+
+        assert 'config.get("grants")' in materialization
+        assert "should_revoke(existing_relation=old_relation" in materialization
+        assert "apply_grants(target_relation, grant_config" in materialization
+
+
 def test_subscription_materialization_stays_in_current_database():
     materialization = (MATERIALIZATION_DIR / "subscription.sql").read_text()
     adapter_macros = ADAPTER_MACROS.read_text()
