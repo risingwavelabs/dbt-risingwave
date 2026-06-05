@@ -26,6 +26,9 @@
     grant {{ privilege }} on
     {%- if relation.type == 'materialized_view' %} materialized view
     {%- elif relation.type == 'view' %} view
+    {%- elif relation.type == 'source' %} source
+    {%- elif relation.type == 'sink' %} sink
+    {%- elif relation.type == 'subscription' %} subscription
     {%- else %} table
     {%- endif %}
     {{ relation.render() }} to {{ grantees | join(', ') }}
@@ -36,6 +39,9 @@
     revoke {{ privilege }} on
     {%- if relation.type == 'materialized_view' %} materialized view
     {%- elif relation.type == 'view' %} view
+    {%- elif relation.type == 'source' %} source
+    {%- elif relation.type == 'sink' %} sink
+    {%- elif relation.type == 'subscription' %} subscription
     {%- else %} table
     {%- endif %}
     {{ relation.render() }} from {{ grantees | join(', ') }}

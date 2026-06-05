@@ -5,6 +5,7 @@
         identifier=identifier, schema=schema, database=database, type="table"
     ) -%}
     {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
+    {%- set grant_config = config.get("grants") -%}
 
     {% if full_refresh_mode and old_relation %} {{ adapter.drop_relation(old_relation) }} {% endif %}
 
@@ -24,6 +25,9 @@
             {% do store_raw_result(name="main", message="ALTER_TABLE", code="ALTER_TABLE", rows_affected="-1") %}
         {% endif %}
     {% endif %}
+
+    {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=full_refresh_mode) %}
+    {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
     {% do persist_docs(target_relation, model) %}
 
