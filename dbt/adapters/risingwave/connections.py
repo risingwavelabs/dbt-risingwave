@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import psycopg2
 from dbt.adapters.contracts.connection import Connection
@@ -12,6 +12,23 @@ from dbt.adapters.postgres.connections import (
 logger = AdapterLogger("RisingWave")
 
 
+RISINGWAVE_PROFILE_SESSION_SETTINGS = (
+    "streaming_parallelism",
+    "streaming_parallelism_for_backfill",
+    "streaming_max_parallelism",
+    "enable_serverless_backfill",
+    "backfill_rate_limit",
+    "source_rate_limit",
+    "sink_rate_limit",
+    "streaming_parallelism_for_materialized_view",
+    "streaming_parallelism_for_source",
+    "streaming_parallelism_for_table",
+    "streaming_parallelism_for_sink",
+    "streaming_parallelism_for_index",
+    "enable_index_selection",
+)
+
+
 @dataclass
 class RisingWaveCredentials(PostgresCredentials):
     """
@@ -19,11 +36,19 @@ class RisingWaveCredentials(PostgresCredentials):
     & https://github.com/dbt-labs/dbt-core/blob/b2ea2b8b256e5db1da0b712dfedd7973e1e50a37/plugins/postgres/dbt/adapters/postgres/connections.py#L20
     """
 
-    # todo(siwei): append more config here
-    streaming_parallelism: Optional[int] = None
-    streaming_parallelism_for_backfill: Optional[int] = None
-    streaming_max_parallelism: Optional[int] = None
+    streaming_parallelism: Optional[Any] = None
+    streaming_parallelism_for_backfill: Optional[Any] = None
+    streaming_max_parallelism: Optional[Any] = None
     enable_serverless_backfill: Optional[bool] = None
+    backfill_rate_limit: Optional[int] = None
+    source_rate_limit: Optional[int] = None
+    sink_rate_limit: Optional[int] = None
+    streaming_parallelism_for_materialized_view: Optional[Any] = None
+    streaming_parallelism_for_source: Optional[Any] = None
+    streaming_parallelism_for_table: Optional[Any] = None
+    streaming_parallelism_for_sink: Optional[Any] = None
+    streaming_parallelism_for_index: Optional[Any] = None
+    enable_index_selection: Optional[bool] = None
 
     @property
     def type(self):
@@ -148,20 +173,26 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         cursor = handle.cursor()
         try:
             cursor.execute("SET RW_IMPLICIT_FLUSH TO true")
-            session_settings = (
-                ("streaming_parallelism", credentials.streaming_parallelism),
-                (
-                    "streaming_parallelism_for_backfill",
-                    credentials.streaming_parallelism_for_backfill,
-                ),
-                ("streaming_max_parallelism", credentials.streaming_max_parallelism),
-                ("enable_serverless_backfill", credentials.enable_serverless_backfill),
-            )
-            for setting, value in session_settings:
+            for setting in RISINGWAVE_PROFILE_SESSION_SETTINGS:
+                value = getattr(credentials, setting, None)
                 if value is not None:
-                    cursor.execute(f"SET {setting} = {value}")
+                    cursor.execute(
+                        f"SET {setting} = {RisingWaveConnectionManager._format_session_value(value)}"
+                    )
         finally:
             cursor.close()
+
+    @staticmethod
+    def _format_session_value(value: Any) -> str:
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, (int, float)):
+            return str(value)
+
+        value_str = str(value)
+        if value_str.lower() in {"default", "adaptive"}:
+            return value_str
+        return "'" + value_str.replace("'", "''") + "'"
 
     def cancel(self, connection: Connection):
         # index here references the column order in processlist output:
