@@ -2,6 +2,39 @@
 -- But materialize verison includes 'index' type.
 -- Here we only query table, view, materialized view and source. (without index and SINK)
 
+{% macro risingwave__render_session_config_value(value) -%}
+  {%- if value is boolean -%}
+    {{- value | lower -}}
+  {%- elif value is number -%}
+    {{- value -}}
+  {%- else -%}
+    {%- set value_str = value | string -%}
+    {%- if value_str | lower in ["default", "adaptive"] -%}
+      {{- value_str -}}
+    {%- else -%}
+      '{{- value_str | replace("'", "''") -}}'
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro risingwave__native_model_session_settings() -%}
+  {{ return([
+    "streaming_parallelism",
+    "streaming_parallelism_for_backfill",
+    "streaming_max_parallelism",
+    "enable_serverless_backfill",
+    "backfill_rate_limit",
+    "source_rate_limit",
+    "sink_rate_limit",
+    "streaming_parallelism_for_materialized_view",
+    "streaming_parallelism_for_source",
+    "streaming_parallelism_for_table",
+    "streaming_parallelism_for_sink",
+    "streaming_parallelism_for_index",
+    "enable_index_selection",
+  ]) }}
+{%- endmacro %}
+
 {% macro risingwave__render_sql_header() -%}
   {%- set header_parts = [] -%}
   {%- set user_header = config.get("sql_header", none) -%}
@@ -9,30 +42,17 @@
     {%- do header_parts.append(user_header) -%}
   {%- endif -%}
 
-  {%- set background_ddl = config.get("background_ddl", false) -%}
-  {%- if background_ddl -%}
-    {%- do header_parts.append("set background_ddl = true;") -%}
+  {%- set background_ddl = config.get("background_ddl", none) -%}
+  {%- if background_ddl is not none -%}
+    {%- do header_parts.append("set background_ddl = " ~ risingwave__render_session_config_value(background_ddl) ~ ";") -%}
   {%- endif -%}
 
-  {%- set streaming_parallelism = config.get("streaming_parallelism", none) -%}
-  {%- if streaming_parallelism is not none -%}
-    {%- do header_parts.append("set streaming_parallelism = " ~ streaming_parallelism ~ ";") -%}
-  {%- endif -%}
-
-  {%- set streaming_parallelism_for_backfill = config.get("streaming_parallelism_for_backfill", none) -%}
-  {%- if streaming_parallelism_for_backfill is not none -%}
-    {%- do header_parts.append("set streaming_parallelism_for_backfill = " ~ streaming_parallelism_for_backfill ~ ";") -%}
-  {%- endif -%}
-
-  {%- set streaming_max_parallelism = config.get("streaming_max_parallelism", none) -%}
-  {%- if streaming_max_parallelism is not none -%}
-    {%- do header_parts.append("set streaming_max_parallelism = " ~ streaming_max_parallelism ~ ";") -%}
-  {%- endif -%}
-
-  {%- set enable_serverless_backfill = config.get("enable_serverless_backfill", none) -%}
-  {%- if enable_serverless_backfill is not none -%}
-    {%- do header_parts.append("set enable_serverless_backfill = " ~ enable_serverless_backfill | lower ~ ";") -%}
-  {%- endif -%}
+  {%- for setting in risingwave__native_model_session_settings() -%}
+    {%- set value = config.get(setting, none) -%}
+    {%- if value is not none -%}
+      {%- do header_parts.append("set " ~ setting ~ " = " ~ risingwave__render_session_config_value(value) ~ ";") -%}
+    {%- endif -%}
+  {%- endfor -%}
 
   {{- header_parts | join("\n") -}}
 {%- endmacro %}
@@ -164,6 +184,8 @@
 {% endmacro %}
 
 {% macro risingwave__get_create_index_sql(relation, index_dict) -%}
+  {{ risingwave__render_sql_header() }}
+
   {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
   {%- set comma_separated_columns = ", ".join(index_config.columns) -%}
   {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}

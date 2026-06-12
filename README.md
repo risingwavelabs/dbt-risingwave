@@ -48,9 +48,9 @@ Use `schema_authorization` when dbt should create schemas with a specific owner:
 
 See [docs/configuration.md](docs/configuration.md) for model-level and `dbt_project.yml` examples.
 
-### Streaming Parallelism
+### RisingWave Native Model Configs
 
-The adapter supports RisingWave session settings such as `streaming_parallelism`, `streaming_parallelism_for_backfill`, and `streaming_max_parallelism` in both profiles and model configs.
+The adapter supports RisingWave session settings such as `streaming_parallelism`, `streaming_parallelism_for_backfill`, `backfill_rate_limit`, and `enable_index_selection` in profiles and native model configs.
 
 See [docs/configuration.md](docs/configuration.md) for the full configuration matrix.
 

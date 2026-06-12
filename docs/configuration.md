@@ -37,6 +37,9 @@ default:
       streaming_parallelism_for_backfill: 2
       streaming_max_parallelism: 8
       enable_serverless_backfill: true
+      backfill_rate_limit: 1000
+      streaming_parallelism_for_materialized_view: 4
+      enable_index_selection: true
   target: dev
 ```
 
@@ -48,6 +51,17 @@ Supported adapter-specific profile keys:
 | `streaming_parallelism_for_backfill` | Sets `SET streaming_parallelism_for_backfill = ...` for the session. |
 | `streaming_max_parallelism` | Sets `SET streaming_max_parallelism = ...` for the session. |
 | `enable_serverless_backfill` | Sets `SET enable_serverless_backfill = true/false` for the session. |
+| `backfill_rate_limit` | Sets `SET backfill_rate_limit = ...` for the session. |
+| `source_rate_limit` | Sets `SET source_rate_limit = ...` for the session. |
+| `sink_rate_limit` | Sets `SET sink_rate_limit = ...` for the session. |
+| `streaming_parallelism_for_materialized_view` | Sets `SET streaming_parallelism_for_materialized_view = ...` for the session. |
+| `streaming_parallelism_for_source` | Sets `SET streaming_parallelism_for_source = ...` for the session. |
+| `streaming_parallelism_for_table` | Sets `SET streaming_parallelism_for_table = ...` for the session. |
+| `streaming_parallelism_for_sink` | Sets `SET streaming_parallelism_for_sink = ...` for the session. |
+| `streaming_parallelism_for_index` | Sets `SET streaming_parallelism_for_index = ...` for the session. |
+| `enable_index_selection` | Sets `SET enable_index_selection = true/false` for the session. |
+
+`background_ddl` is supported as a model config rather than a profile key because the adapter must issue `WAIT` after background DDL submissions to preserve dbt's dependency semantics.
 
 ## Model Configuration
 
@@ -94,23 +108,53 @@ from ...
 
 The adapter appends its own RisingWave session settings after the custom header when those configs are present.
 
-### Streaming Parallelism Per Model
+### Native Session Model Configs
 
-You can override the session-level streaming settings for an individual model:
+You can override supported RisingWave session settings for an individual model. These configs are emitted in the SQL header before the model DDL runs:
 
 ```sql
 {{ config(
     materialized='materialized_view',
     streaming_parallelism=2,
     streaming_parallelism_for_backfill=2,
-    streaming_max_parallelism=8
+    streaming_max_parallelism=8,
+    streaming_parallelism_for_materialized_view=4,
+    backfill_rate_limit=1000,
+    enable_index_selection=true
 ) }}
 
 select *
 from {{ ref('events') }}
 ```
 
-These values are emitted in the SQL header before the model DDL runs.
+Supported model configs:
+
+| Key | Description |
+| --- | --- |
+| `streaming_parallelism` | Sets the initial streaming parallelism for streaming jobs. |
+| `streaming_parallelism_for_backfill` | Sets streaming parallelism for backfill. |
+| `streaming_max_parallelism` | Sets the maximum future streaming parallelism. |
+| `streaming_parallelism_for_materialized_view` | Sets materialized-view-specific streaming parallelism. |
+| `streaming_parallelism_for_source` | Sets source-specific streaming parallelism. |
+| `streaming_parallelism_for_table` | Sets table-specific streaming parallelism. |
+| `streaming_parallelism_for_sink` | Sets sink-specific streaming parallelism. |
+| `streaming_parallelism_for_index` | Sets index-specific streaming parallelism. |
+| `backfill_rate_limit` | Sets the backfill rate limit for MV/source/sink backfilling. |
+| `source_rate_limit` | Sets the source rate limit. |
+| `sink_rate_limit` | Sets the sink rate limit. |
+| `enable_serverless_backfill` | Enables or disables serverless backfill for streaming queries. |
+| `background_ddl` | Runs supported DDL in the background and waits before dbt continues. |
+| `enable_index_selection` | Enables or disables index selection while planning the model SQL. |
+
+These configs can also be set globally in `dbt_project.yml`:
+
+```yaml
+models:
+  my_project:
+    +streaming_parallelism_for_backfill: 2
+    +backfill_rate_limit: 1000
+    +enable_index_selection: true
+```
 
 ### Serverless Backfill
 
