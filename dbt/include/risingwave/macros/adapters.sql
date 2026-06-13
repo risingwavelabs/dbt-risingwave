@@ -224,6 +224,8 @@
       drop source if exists {{ relation }} cascade
     {% elif relation.type == 'sink' %}
       drop sink if exists {{ relation }} cascade
+    {% elif relation.type == 'secret' %}
+      drop secret if exists {{ relation }} cascade
     {% elif relation.type == 'subscription' %}
       drop subscription if exists {{ relation }} cascade
     {% elif relation.type == 'function' %}

@@ -3,6 +3,24 @@
    for non-table objects. These overrides add the correct ON <type> clause. #}
 
 {% macro risingwave__get_show_grant_sql(relation) %}
+  {% if relation.type == 'secret' %}
+  with relation_acl as (
+    select
+      unnest(rw_secrets.acl) as acl_entry
+    from rw_catalog.rw_secrets
+    join rw_catalog.rw_schemas on rw_secrets.schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ relation.schema }}'
+      and rw_secrets.name = '{{ relation.identifier }}'
+  )
+  select
+    split_part(acl_entry, '=', 1) as grantee,
+    case
+      when split_part(split_part(acl_entry, '=', 2), '/', 1) like '%U%' then 'usage'
+    end as privilege_type
+  from relation_acl
+  where split_part(acl_entry, '=', 1) not in ('root', 'rwadmin', 'postgres')
+    and split_part(split_part(acl_entry, '=', 2), '/', 1) like '%U%'
+  {% else %}
   with relation_acl as (
     select
       unnest(rw_relations.acl) as acl_entry
@@ -20,6 +38,7 @@
   from relation_acl
   where split_part(acl_entry, '=', 1) not in ('root', 'rwadmin', 'postgres')
     and split_part(split_part(acl_entry, '=', 2), '/', 1) like '%r%'
+  {% endif %}
 {% endmacro %}
 
 {%- macro risingwave__get_grant_sql(relation, privilege, grantees) -%}
@@ -28,6 +47,7 @@
     {%- elif relation.type == 'view' %} view
     {%- elif relation.type == 'source' %} source
     {%- elif relation.type == 'sink' %} sink
+    {%- elif relation.type == 'secret' %} secret
     {%- elif relation.type == 'subscription' %} subscription
     {%- else %} table
     {%- endif %}
@@ -41,6 +61,7 @@
     {%- elif relation.type == 'view' %} view
     {%- elif relation.type == 'source' %} source
     {%- elif relation.type == 'sink' %} sink
+    {%- elif relation.type == 'secret' %} secret
     {%- elif relation.type == 'subscription' %} subscription
     {%- else %} table
     {%- endif %}

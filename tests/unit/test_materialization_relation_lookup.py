@@ -49,6 +49,30 @@ def test_connector_materializations_apply_grants():
         assert "apply_grants(target_relation, grant_config" in materialization
 
 
+def test_secret_materialization_uses_secret_catalog_lifecycle():
+    materialization = (MATERIALIZATION_DIR / "secret.sql").read_text()
+
+    assert "type='secret'" in materialization
+    assert "rw_catalog.rw_secrets" in materialization
+    assert "rw_catalog.rw_schemas" in materialization
+    assert "drop secret if exists {{ target_relation }} cascade" in materialization
+    assert "risingwave__run_sql(sql)" in materialization
+    assert 'config.get("grants")' in materialization
+    assert "apply_grants(target_relation, grant_config" in materialization
+    assert "adapter.get_relation" not in materialization
+
+
+def test_secret_grants_use_secret_catalog_and_usage_privilege():
+    grants = (MATERIALIZATION_DIR / "grants.sql").read_text()
+    adapter_macros = ADAPTER_MACROS.read_text()
+
+    assert "relation.type == 'secret'" in grants
+    assert "rw_catalog.rw_secrets" in grants
+    assert "then 'usage'" in grants
+    assert "relation.type == 'secret' %} secret" in grants
+    assert "drop secret if exists {{ relation }} cascade" in adapter_macros
+
+
 def test_subscription_materialization_stays_in_current_database():
     materialization = (MATERIALIZATION_DIR / "subscription.sql").read_text()
     adapter_macros = ADAPTER_MACROS.read_text()

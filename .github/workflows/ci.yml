@@ -735,6 +735,8 @@ jobs:
     services:
       risingwave:
         image: ghcr.io/risingwavelabs/risingwave:latest # RW version should be manually updated until a released version is compatiable with this adapter.
+        env:
+          RW_SECRET_STORE_PRIVATE_KEY_HEX: 0123456789abcdef0123456789abcdef
         ports:
           - 4566:4566
         options: >-
