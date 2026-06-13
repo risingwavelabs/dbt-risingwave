@@ -157,6 +157,7 @@ from {{ ref('events') }}
 | `view` | Creates a view from the model query. |
 | `incremental` | Batch-style incremental updates for tables. Prefer `materialized_view` when a streaming MV fits the workload. |
 | `connection` | Runs a full `CREATE CONNECTION` statement supplied by the model SQL. |
+| `secret` | Runs a full `CREATE SECRET` statement supplied by the model SQL. |
 | `source` | Runs a full `CREATE SOURCE` statement supplied by the model SQL. |
 | `table_with_connector` | Runs a full `CREATE TABLE ... WITH (...)` statement supplied by the model SQL. Supports explicit additive `ALTER TABLE ADD COLUMN` changes through `on_schema_change='append_new_columns'`. |
 | `sink` | Creates a sink, either from adapter configs or from a full SQL statement. |

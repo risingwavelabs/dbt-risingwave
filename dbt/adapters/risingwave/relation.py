@@ -30,6 +30,7 @@ class RisingWaveRelationType(StrEnum):
     Source = "source"
     Sink = "sink"
     Connection = "connection"
+    Secret = "secret"
     Subscription = "subscription"
 
 

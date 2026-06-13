@@ -219,6 +219,24 @@ Caveat:
 
 - RisingWave `WAIT` waits for all background creating jobs, not only the job started by the current dbt model. If other background DDL is running in the same cluster, the dbt node may wait on that work too.
 
+### Secrets
+
+Use `materialized='secret'` to manage a RisingWave secret from a dbt model. The model SQL should be the complete `CREATE SECRET` statement:
+
+```sql
+{{ config(materialized='secret') }}
+
+create secret {{ this.identifier }}
+with (backend = 'meta')
+as '{{ env_var("DBT_RW_KAFKA_PASSWORD") }}'
+```
+
+The materialization checks `rw_catalog.rw_secrets` in the target schema. If the secret already exists, normal `dbt run` leaves it unchanged. `dbt run --full-refresh` drops and recreates the secret from the model SQL.
+
+Secrets support dbt grants with RisingWave's `usage` privilege.
+
+Because dbt compiles model SQL into artifacts, prefer `env_var()` or another external secret source rather than hard-coding sensitive values in the project.
+
 ### Subscriptions for Cross-Database MVs
 
 Use `materialized='subscription'` to create a RisingWave subscription in the active dbt target database. This is useful for keeping the upstream log store available for cross-database materialized views managed from another target database.
