@@ -631,6 +631,48 @@
   alter materialized view {{ old_relation }} swap with {{ new_relation }}
 {%- endmacro %}
 
+{%- macro risingwave__relation_has_dependents(relation) -%}
+  {%- set relation_schema = relation.schema | replace("'", "''") -%}
+  {%- set relation_identifier = relation.identifier | replace("'", "''") -%}
+
+  {% call statement('zero_downtime_relation_has_dependents', fetch_result=True) -%}
+    select exists (
+      select 1
+      from rw_catalog.rw_depend
+      join rw_catalog.rw_relations on rw_depend.refobjid = rw_relations.id
+      join rw_catalog.rw_schemas on rw_relations.schema_id = rw_schemas.id
+      where rw_schemas.name = '{{ relation_schema }}'
+        and rw_relations.name = '{{ relation_identifier }}'
+    ) as has_dependents
+  {%- endcall %}
+
+  {%- set result_table = load_result('zero_downtime_relation_has_dependents').table -%}
+  {%- if result_table is none or result_table.rows | length == 0 -%}
+    {{ return(false) }}
+  {%- endif -%}
+
+  {{ return(result_table.rows[0][0]) }}
+{%- endmacro %}
+
+{%- macro risingwave__drop_zero_downtime_temp_relation(relation) -%}
+  {%- if risingwave__relation_has_dependents(relation) -%}
+    {{- log("Preserving zero-downtime temporary relation because dependent objects still reference it: " ~ relation) -}}
+    {{ return(false) }}
+  {%- endif -%}
+
+  {% call statement('drop_zero_downtime_temp_relation') -%}
+    {% if relation.type == 'view' %}
+      drop view if exists {{ relation }}
+    {% elif relation.type == 'materializedview' or relation.type == 'materialized_view' %}
+      drop materialized view if exists {{ relation }}
+    {% else %}
+      {{ exceptions.raise_compiler_error("Unsupported zero-downtime temporary relation type: " ~ relation.type) }}
+    {% endif %}
+  {%- endcall %}
+
+  {{ return(true) }}
+{%- endmacro %}
+
 
 
 
@@ -696,18 +738,20 @@
       ) -%}
       
       {% if dry_run %}
-        {{ print("DRY RUN: Would drop " ~ temp_obj[3] ~ " " ~ obj_relation) }}
+        {% if risingwave__relation_has_dependents(obj_relation) %}
+          {{ print("DRY RUN: Would preserve " ~ temp_obj[3] ~ " " ~ obj_relation ~ " because dependent objects still reference it") }}
+        {% else %}
+          {{ print("DRY RUN: Would drop " ~ temp_obj[3] ~ " " ~ obj_relation) }}
+        {% endif %}
       {% else %}
-        {{ print("Dropping temporary " ~ temp_obj[3] ~ ": " ~ obj_relation) }}
-        {% call statement('drop_temp_obj_' ~ loop.index) -%}
-          {% if temp_obj[3] == 'materialized view' %}
-            DROP MATERIALIZED VIEW IF EXISTS {{ obj_relation }} CASCADE
-          {% elif temp_obj[3] == 'view' %}
-            DROP VIEW IF EXISTS {{ obj_relation }} CASCADE
-          {% elif temp_obj[3] == 'sink' %}
-            DROP SINK IF EXISTS {{ obj_relation }} CASCADE
-          {% endif %}
-        {%- endcall %}
+        {% if temp_obj[3] == 'materialized view' or temp_obj[3] == 'view' %}
+          {{ risingwave__drop_zero_downtime_temp_relation(obj_relation) }}
+        {% elif temp_obj[3] == 'sink' %}
+          {{ print("Dropping temporary " ~ temp_obj[3] ~ ": " ~ obj_relation) }}
+          {% call statement('drop_temp_obj_' ~ loop.index) -%}
+            DROP SINK IF EXISTS {{ obj_relation }}
+          {%- endcall %}
+        {% endif %}
       {% endif %}
     {% endfor %}
     

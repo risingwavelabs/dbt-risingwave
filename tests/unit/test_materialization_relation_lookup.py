@@ -99,6 +99,26 @@ def test_native_session_model_configs_are_allowlisted():
     assert "set database" not in adapter_macros.lower()
 
 
+def test_zero_downtime_immediate_cleanup_is_dependency_safe():
+    materialized_view = (MATERIALIZATION_DIR / "materialized_view.sql").read_text()
+    view = (MATERIALIZATION_DIR / "view.sql").read_text()
+    adapter_macros = ADAPTER_MACROS.read_text()
+
+    for materialization in (materialized_view, view):
+        assert "risingwave__drop_zero_downtime_temp_relation(temp_relation)" in materialization
+        assert "risingwave__drop_relation(temp_relation)" not in materialization
+
+    assert "rw_catalog.rw_depend" in adapter_macros
+    assert (
+        "Preserving zero-downtime temporary relation because dependent objects still reference it"
+        in adapter_macros
+    )
+    assert "drop materialized view if exists {{ relation }}" in adapter_macros
+    assert "drop view if exists {{ relation }}" in adapter_macros
+    assert "DROP MATERIALIZED VIEW IF EXISTS {{ obj_relation }} CASCADE" not in adapter_macros
+    assert "DROP VIEW IF EXISTS {{ obj_relation }} CASCADE" not in adapter_macros
+
+
 def test_profile_session_settings_are_allowlisted():
     connections = load_local_connections_module()
 

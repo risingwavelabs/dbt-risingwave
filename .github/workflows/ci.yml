@@ -598,11 +598,15 @@ jobs:
       working-directory: tests/e2e/zero_downtime
       env:
         DBT_RW_ZERO_DOWNTIME_STAGE: changed
+    - name: dbt-cleanup-zero-downtime-temp-objects
+      run: dbt run-operation cleanup_temp_objects
+      working-directory: tests/e2e/zero_downtime
     - name: dbt-test-zero-downtime-swap
       run: dbt test
       working-directory: tests/e2e/zero_downtime
       env:
         DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: changed
+        DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED: "true"
     - name: dbt-doc
       run: dbt docs generate
       working-directory: tests/e2e/zero_downtime

@@ -362,6 +362,7 @@ Limitations:
 ### Zero-Downtime Rebuilds
 
 `materialized_view` and `view` support swap-based zero-downtime rebuilds.
+Temporary cleanup is dependency-safe: if downstream objects still reference the swapped-out temporary object, cleanup preserves it instead of using `CASCADE`.
 
 ```sql
 {{ config(
