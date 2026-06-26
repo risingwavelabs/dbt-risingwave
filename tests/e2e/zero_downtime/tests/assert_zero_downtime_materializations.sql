@@ -1,4 +1,5 @@
 {% set expected_stage = env_var('DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE', 'initial') %}
+{% set expect_temp_cleaned = env_var('DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED', 'false') == 'true' %}
 
 {% if expected_stage not in ['initial', 'changed'] %}
   {{ exceptions.raise_compiler_error("Invalid DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: " ~ expected_stage) }}
@@ -65,7 +66,8 @@ where not exists (
 union all
 
 select 'zero-downtime temp relations should be cleaned up' as failure
-where exists (
+where {{ 'true' if expect_temp_cleaned else 'false' }}
+  and exists (
     select 1
     from rw_relations
     join rw_schemas on schema_id = rw_schemas.id

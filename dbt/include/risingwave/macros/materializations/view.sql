@@ -61,8 +61,8 @@
 
       {# Step 3: Conditionally drop the old view (now with temp name) #}
       {% if immediate_cleanup %}
-        {{- log("Immediately cleaning up temporary view: " ~ temp_relation) -}}
-        {{ risingwave__drop_relation(temp_relation) }}
+        {{- log("Attempting immediate cleanup of temporary view: " ~ temp_relation) -}}
+        {{ risingwave__drop_zero_downtime_temp_relation(temp_relation) }}
       {% else %}
         {{- log("Preserving temporary view for downstream dependencies: " ~ temp_relation) -}}
         {{- log("Manual cleanup required: DROP VIEW IF EXISTS " ~ temp_relation ~ ";") -}}

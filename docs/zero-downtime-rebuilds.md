@@ -22,7 +22,7 @@ When a model already exists and zero downtime is enabled, the adapter:
 
 1. Creates a temporary object with the new definition.
 2. Swaps the temporary object with the original object.
-3. Either preserves or drops the old object, depending on `immediate_cleanup`.
+3. Either preserves or safely drops the old object, depending on `immediate_cleanup` and remaining dependencies.
 
 Temporary objects use the naming pattern `{original_name}_dbt_zero_down_tmp_{timestamp}`.
 
@@ -75,7 +75,7 @@ By default, temporary objects are preserved after the swap to avoid breaking dow
 ) }}
 ```
 
-To drop the temporary object immediately after the swap:
+To try to drop the temporary object immediately after the swap:
 
 ```sql
 {{ config(
@@ -84,7 +84,21 @@ To drop the temporary object immediately after the swap:
 ) }}
 ```
 
-Use immediate cleanup carefully because dependent objects may still refer to the pre-swap object graph.
+Immediate cleanup is dependency-safe and best-effort. RisingWave `SWAP WITH` keeps existing downstream objects attached to the pre-swap object ID, now renamed to the temporary object. If any dependent object still references that temporary object, the adapter preserves it even when `immediate_cleanup` is `true`; it does not use `CASCADE` for zero-downtime temporary object cleanup.
+
+For a chain such as `mv1 -> mv2 -> mv3`, updating only `mv1` can leave `mv2` and `mv3` reading from the preserved temporary `mv1` object. Rebuild dependent models when they should move to the new upstream definition:
+
+```bash
+dbt run --select "mv1+" --vars 'zero_downtime: true'
+```
+
+Then run cleanup after dependent models have been rebuilt:
+
+```bash
+dbt run-operation cleanup_temp_objects
+```
+
+The cleanup helper also skips temporary objects that still have dependents. Run it again after rebuilding more downstream objects if it reports preserved objects.
 
 ## When Swap-Based Rebuilds Apply
 
