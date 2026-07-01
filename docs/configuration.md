@@ -434,3 +434,26 @@ with (
 ## Related dbt Configs
 
 The adapter also works with standard dbt configs such as `indexes`, `contract`, `grants`, `unique_key`, and `on_schema_change`. Refer to the dbt docs for the generic semantics; this page focuses on RisingWave-specific behavior.
+
+### Adapter Validation
+
+`dbt-risingwave` emits best-effort warnings for known unsupported or ignored RisingWave-specific model patterns before running adapter-managed DDL. These checks intentionally cover only high-confidence cases that can be identified from model SQL or dbt config without connecting to RisingWave catalog state.
+
+Examples include:
+
+- full `CREATE`, `DROP`, `ALTER`, or `TRUNCATE` statements inside query-based materializations such as `materialized_view`, `table`, `view`, `incremental`, and adapter-managed `sink`
+- `retention_seconds` on `CREATE MATERIALIZED VIEW`
+- `retention_seconds` on `CREATE SUBSCRIPTION` instead of `retention`
+- dbt model config keys that this adapter does not render, such as `retention_seconds` as model config
+- subscription-only configs such as `retention` or `subscription_options` on non-`subscription` materializations
+- `zero_downtime` on materializations other than `materialized_view` and `view`
+- PostgreSQL index options `unique` and `type`, which RisingWave ignores
+
+Warnings are enabled by default. Projects can make them fail compilation or disable them:
+
+```yaml
+vars:
+  risingwave_adapter_validation: warn   # warn, error, or off
+```
+
+Use `error` in CI when you want these adapter-specific checks to block the run.

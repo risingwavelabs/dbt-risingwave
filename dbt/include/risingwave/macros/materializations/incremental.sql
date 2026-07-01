@@ -13,6 +13,8 @@
   {%- set full_refresh_mode = (should_full_refresh()  or existing_relation.is_view) -%}
   {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%}
 
+  {{ risingwave__validate_model_sql(sql, 'incremental', true) }}
+
   -- the temp_ and backup_ relations should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop
   -- later, before we try to use this name for the current operation. This has to happen before

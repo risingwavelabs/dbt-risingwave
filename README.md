@@ -135,6 +135,11 @@ CREATE INDEX IF NOT EXISTS "__dbt_index_mv_user_id"
 
 Note: RisingWave does not support `unique` or `type` (index method) options from the Postgres adapter. These options are silently ignored.
 
+`dbt-risingwave` also emits adapter validation warnings for known unsupported or ignored model patterns,
+such as `retention_seconds` on `CREATE MATERIALIZED VIEW` or complete DDL statements inside query-based
+materializations. See [docs/configuration.md](docs/configuration.md#adapter-validation) for the warning
+list and the `risingwave_adapter_validation` mode.
+
 ## Materializations
 
 The adapter follows standard dbt model workflows, with RisingWave-specific materializations and behaviors.

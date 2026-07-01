@@ -7,6 +7,8 @@
     {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
     {%- set grant_config = config.get("grants") -%}
 
+    {{ risingwave__validate_model_sql(sql, "table_with_connector", false) }}
+
     {% if full_refresh_mode and old_relation %} {{ adapter.drop_relation(old_relation) }} {% endif %}
 
     {{ run_hooks(pre_hooks, inside_transaction=False) }}

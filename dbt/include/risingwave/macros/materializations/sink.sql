@@ -9,6 +9,9 @@
     ) -%}
     {%- set old_relation = risingwave__get_relation_without_caching(target_relation) -%}
     {%- set grant_config = config.get("grants") -%}
+    {%- set connector = config.get("connector") -%}
+
+    {{ risingwave__validate_model_sql(sql, "sink", connector is not none) }}
 
     {% if full_refresh_mode and old_relation %} {{ adapter.drop_relation(old_relation) }} {% endif %}
 
@@ -16,7 +19,6 @@
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% if old_relation is none or (full_refresh_mode and old_relation) %}
-        {%- set connector = config.get("connector") -%}
         {% call statement("main") -%}
             {% if connector %} {{ risingwave__create_sink(target_relation, sql) }}
             {% else %} {{ risingwave__run_sql(sql) }}

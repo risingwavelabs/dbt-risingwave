@@ -15,6 +15,8 @@
   {%- set zero_downtime_mode = model_has_zero_downtime and user_requested_zero_downtime -%}
   {%- set immediate_cleanup = zero_downtime_config.get('immediate_cleanup', false) -%}
 
+  {{ risingwave__validate_model_sql(sql, 'materialized_view', true) }}
+
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}
