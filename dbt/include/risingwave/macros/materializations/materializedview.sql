@@ -9,6 +9,8 @@
                                                 database=database,
                                                 type='materializedview') -%}
 
+  {{ risingwave__validate_model_sql(sql, 'materializedview', true) }}
+
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}

@@ -11,6 +11,8 @@
   {%- set old_relation = none -%}
   {%- set grant_config = config.get("grants") -%}
 
+  {{ risingwave__validate_model_sql(sql, 'secret', false) }}
+
   {% if execute %}
     {% set secret_exists_sql %}
       select 1

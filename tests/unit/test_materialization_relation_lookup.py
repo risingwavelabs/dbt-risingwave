@@ -13,6 +13,7 @@ MATERIALIZATION_DIR = (
     / "materializations"
 )
 ADAPTER_MACROS = MATERIALIZATION_DIR.parent / "adapters.sql"
+VALIDATION_MACROS = MATERIALIZATION_DIR.parent / "validation.sql"
 CONNECTIONS = MATERIALIZATION_DIR.parents[3] / "adapters" / "risingwave" / "connections.py"
 
 NATIVE_MODEL_SESSION_SETTINGS = {
@@ -97,6 +98,42 @@ def test_native_session_model_configs_are_allowlisted():
     assert 'config.get("background_ddl", none)' in adapter_macros
     assert "risingwave__native_model_session_settings()" in adapter_macros
     assert "set database" not in adapter_macros.lower()
+
+
+def test_adapter_validation_rules_are_documented_in_macro():
+    validation_macros = VALIDATION_MACROS.read_text()
+
+    assert "risingwave_adapter_validation" in validation_macros
+    assert "`retention_seconds` is not a supported option on `CREATE MATERIALIZED VIEW`" in validation_macros
+    assert "`CREATE SUBSCRIPTION` uses `WITH (retention = ...)`" in validation_macros
+    assert "`indexes[].unique` is a PostgreSQL adapter option" in validation_macros
+    assert "`indexes[].type` is a PostgreSQL adapter option" in validation_macros
+    assert "`zero_downtime` is only supported" in validation_macros
+    assert "RW001" in validation_macros
+    assert "RW009" in validation_macros
+
+
+def test_adapter_validation_is_wired_into_materializations():
+    expected_calls = {
+        "materialized_view.sql": "risingwave__validate_model_sql(sql, 'materialized_view', true)",
+        "materializedview.sql": "risingwave__validate_model_sql(sql, 'materializedview', true)",
+        "table.sql": "risingwave__validate_model_sql(sql, 'table', true)",
+        "view.sql": "risingwave__validate_model_sql(sql, 'view', true)",
+        "incremental.sql": "risingwave__validate_model_sql(sql, 'incremental', true)",
+        "subscription.sql": 'risingwave__validate_model_sql(sql, "subscription", true)',
+        "source.sql": 'risingwave__validate_model_sql(sql, "source", false)',
+        "table_with_connector.sql": 'risingwave__validate_model_sql(sql, "table_with_connector", false)',
+        "connection.sql": "risingwave__validate_model_sql(sql, 'connection', false)",
+        "secret.sql": "risingwave__validate_model_sql(sql, 'secret', false)",
+    }
+
+    for filename, expected_call in expected_calls.items():
+        materialization = (MATERIALIZATION_DIR / filename).read_text()
+        assert expected_call in materialization
+
+    sink = (MATERIALIZATION_DIR / "sink.sql").read_text()
+    assert 'config.get("connector")' in sink
+    assert 'risingwave__validate_model_sql(sql, "sink", connector is not none)' in sink
 
 
 def test_zero_downtime_immediate_cleanup_is_dependency_safe():

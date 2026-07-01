@@ -10,6 +10,8 @@
                                                 type='table') -%}
   {%- set grant_config = config.get('grants') -%}
 
+  {{ risingwave__validate_model_sql(sql, 'table', true) }}
+
   {% if full_refresh_mode and old_relation %}
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}

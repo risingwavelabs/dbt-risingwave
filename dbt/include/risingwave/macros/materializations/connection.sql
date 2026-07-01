@@ -9,6 +9,8 @@
   ) -%}
   {%- set existing_connection = false -%}
 
+  {{ risingwave__validate_model_sql(sql, 'connection', false) }}
+
   {% if execute %}
     {% set connection_exists_sql %}
       select 1
