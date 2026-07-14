@@ -238,7 +238,7 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
 
         logger.debug(f"Cancelling query '{connection_name}' ({pid})")
         try:
-            self.add_query(f"KILL {pid}")
+            self.add_query("KILL %s", bindings=(pid,))
         except Exception as exc:
             logger.debug(f"Error while cancelling query: {exc}")
             raise
