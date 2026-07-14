@@ -6,7 +6,7 @@ This directory contains the adapter-specific documentation that used to be mixed
 
 - [configuration.md](configuration.md): profile settings, model configuration, sink options, and subscriptions
 - [functions.md](functions.md): first-version RisingWave function support and its limits
-- [zero-downtime-rebuilds.md](zero-downtime-rebuilds.md): zero-downtime rebuild flow for materialized views and views
+- [zero-downtime-rebuilds.md](zero-downtime-rebuilds.md): zero-downtime rebuild flow for views and materialized views, plus supported sink cut-overs
 
 ## Start Here
 
@@ -15,4 +15,4 @@ If you are new to the adapter:
 1. Read the root [README.md](../README.md) for installation and basic project setup.
 2. Read [configuration.md](configuration.md) for RisingWave-specific configuration.
 3. Read [functions.md](functions.md) if you plan to manage RisingWave scalar UDFs with dbt.
-4. Read [zero-downtime-rebuilds.md](zero-downtime-rebuilds.md) if you plan to use swap-based rebuilds.
+4. Read [zero-downtime-rebuilds.md](zero-downtime-rebuilds.md) if you plan to use swap-based rebuilds or sink cut-overs.

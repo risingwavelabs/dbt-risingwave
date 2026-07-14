@@ -1,11 +1,13 @@
-# Zero Downtime Rebuilds for Materialized Views and Views
+# Zero-Downtime Rebuilds and Sink Cut-Overs
 
 ## Overview
 
-This feature enables zero-downtime rebuilds for both materialized views and views by using swap-based updates.
+This feature enables zero-downtime rebuilds for materialized views and views, and
+zero-downtime cut-over for supported sinks.
 
 - Materialized views use `ALTER MATERIALIZED VIEW ... SWAP WITH ...`
 - Views use `ALTER VIEW ... SWAP WITH ...`
+- Sinks use `REPLACE SINK ... FROM relation`
 
 This keeps the original object name available during the update.
 
@@ -15,6 +17,10 @@ This keeps the original object name available during the update.
 - Zero-downtime materialized view rebuilds are supported only on `materialized_view`.
 - The deprecated `materializedview` materialization is not supported.
 - View swap is supported on the `view` materialization.
+- Sink cut-over requires a RisingWave build containing `REPLACE SINK` (planned for
+  RisingWave v3.1.0).
+- Sink cut-over is supported only for adapter-managed `sink` models whose SQL renders to
+  one upstream relation. Raw sink DDL and `CREATE SINK ... AS SELECT ...` are not rewritten.
 
 ## How It Works
 
@@ -26,9 +32,13 @@ When a model already exists and zero downtime is enabled, the adapter:
 
 Temporary objects use the naming pattern `{original_name}_dbt_zero_down_tmp_{timestamp}`.
 
+For a supported sink, the adapter instead issues `REPLACE SINK` directly. RisingWave
+creates a replacement sink job, drains the old sink at the cut-over barrier, and exposes
+the replacement under the original name. No temporary dbt relation is created.
+
 ## Enabling the Feature
 
-Zero-downtime rebuilds require both model configuration and a runtime flag.
+Zero-downtime operations require both model configuration and a runtime flag.
 
 ### Model Configuration
 
@@ -56,6 +66,28 @@ select *
 from {{ ref('source_table') }}
 ```
 
+For an adapter-managed sink, the model body must be only an upstream relation:
+
+```sql
+{{ config(
+    materialized='sink',
+    connector='kafka',
+    connector_parameters={
+      'topic': 'orders',
+      'properties.bootstrap.server': '127.0.0.1:9092'
+    },
+    data_format='plain',
+    data_encode='json',
+    format_parameters={},
+    zero_downtime={'enabled': true}
+) }}
+
+{{ ref('orders_mv') }}
+```
+
+Do not wrap the relation in `SELECT * FROM ...`; the current RisingWave command does not
+support `REPLACE SINK ... AS query`.
+
 ### Runtime Flag
 
 ```bash
@@ -65,6 +97,9 @@ dbt run --vars 'zero_downtime: true'
 If the runtime flag is omitted, the adapter falls back to the normal rebuild flow even when the model is configured for zero downtime.
 
 ## Cleanup Behavior
+
+This section applies to the temporary objects created by view and materialized-view swaps;
+sink replacement does not create a dbt temporary relation.
 
 By default, temporary objects are preserved after the swap to avoid breaking downstream dependencies.
 
@@ -100,9 +135,9 @@ dbt run-operation cleanup_temp_objects
 
 The cleanup helper also skips temporary objects that still have dependents. Run it again after rebuilding more downstream objects if it reports preserved objects.
 
-## When Swap-Based Rebuilds Apply
+## When Zero-Downtime Mode Applies
 
-The adapter uses zero-downtime rebuilds only when all of the following are true:
+The adapter uses zero-downtime mode only when all of the following are true:
 
 1. The relation already exists.
 2. The run is not using `--full-refresh`.
@@ -111,9 +146,29 @@ The adapter uses zero-downtime rebuilds only when all of the following are true:
 
 Otherwise, dbt-risingwave uses the standard handling path.
 
+For sinks, `--full-refresh` deliberately keeps the existing drop/create behavior because
+`REPLACE SINK` always uses `snapshot=false` and cannot provide full-refresh semantics.
+Run a sink cut-over without `--full-refresh`.
+
+## Current Sink Limitations
+
+The current RisingWave implementation rejects `REPLACE SINK` for:
+
+- exactly-once sinks, including Iceberg sinks that use exactly-once state;
+- sink-into-table;
+- auto schema change sinks;
+- sinks using `since_timestamp`; and
+- query-based `REPLACE SINK ... AS query`.
+
+The replacement starts from the cut-over barrier and does not backfill historical rows
+from the new upstream. RisingWave gives the replacement a new sink object id, so privileges
+configured through dbt are reapplied after replacement; privileges managed outside dbt are
+not preserved automatically.
+
 ## Manual Cleanup Helpers
 
-The adapter includes helper macros for listing and cleaning up preserved temporary objects.
+The adapter includes helper macros for listing and cleaning up preserved view and
+materialized-view temporary objects. They do not apply to sinks.
 
 ```bash
 dbt run-operation list_temp_objects
