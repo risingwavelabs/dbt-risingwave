@@ -118,10 +118,10 @@
     ) }}
   {%- endif -%}
 
-  {%- if materialization not in ['materialized_view', 'view'] and config.get('zero_downtime', none) is not none -%}
+  {%- if materialization not in ['materialized_view', 'view', 'sink'] and config.get('zero_downtime', none) is not none -%}
     {{ risingwave__validation_report(
       'RW009',
-      "`zero_downtime` is only supported by the `materialized_view` and `view` materializations. "
+      "`zero_downtime` is only supported by the `materialized_view`, `view`, and `sink` materializations. "
       ~ "It is ignored by `" ~ materialization ~ "`."
     ) }}
   {%- endif -%}

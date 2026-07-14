@@ -156,6 +156,26 @@ def test_zero_downtime_immediate_cleanup_is_dependency_safe():
     assert "DROP VIEW IF EXISTS {{ obj_relation }} CASCADE" not in adapter_macros
 
 
+def test_sink_zero_downtime_uses_replace_sink_for_from_relation():
+    sink = (MATERIALIZATION_DIR / "sink.sql").read_text()
+    adapter_macros = ADAPTER_MACROS.read_text()
+    validation_macros = VALIDATION_MACROS.read_text()
+
+    assert 'config.get("zero_downtime", {})' in sink
+    assert 'var("zero_downtime", false)' in sink
+    assert "old_relation is not none and not full_refresh_mode and zero_downtime_mode" in sink
+    assert "risingwave__replace_sink(target_relation, replace_from_relation)" in sink
+    assert "risingwave__wait_for_replace_sink()" in sink
+    assert "full_refresh_mode=relation_recreated" in sink
+    assert "replace sink {{ relation }}" in adapter_macros
+    assert "macro risingwave__wait_for_replace_sink()" in adapter_macros
+    assert "forces replacement sinks to background creation" in adapter_macros
+    assert "replace sink if not exists" not in adapter_macros
+    assert "RisingWave REPLACE SINK does not support AS query yet" in adapter_macros
+    assert "Raw sink DDL cannot be safely rewritten" in adapter_macros
+    assert "['materialized_view', 'view', 'sink']" in validation_macros
+
+
 def test_profile_session_settings_are_allowlisted():
     connections = load_local_connections_module()
 

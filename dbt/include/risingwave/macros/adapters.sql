@@ -286,7 +286,27 @@
     {{ risingwave__create_materialized_view_as(relation, sql) }}
 {%- endmacro %}
 
-{% macro risingwave__create_sink(relation, sql) -%}
+{% macro risingwave__replace_sink_from_relation(sql, connector) -%}
+    {%- if connector is none -%}
+        {{ exceptions.raise_compiler_error(
+            "Zero downtime sink replacement is only supported for adapter-managed sinks with `connector` configured. "
+            ~ "Raw sink DDL cannot be safely rewritten from CREATE SINK to REPLACE SINK."
+        ) }}
+    {%- endif -%}
+
+    {%- set from_relation = (sql | default('', true)) | trim -%}
+    {%- if from_relation == '' or from_relation.split() | length != 1 -%}
+        {{ exceptions.raise_compiler_error(
+            "Zero downtime sink replacement currently requires model SQL that renders to one upstream relation, "
+            ~ "for example `{{ ref('orders_mv') }}`. RisingWave REPLACE SINK does not support AS query yet."
+        ) }}
+    {%- endif -%}
+
+    {{ return(from_relation) }}
+{%- endmacro %}
+
+
+{% macro risingwave__sink_ddl(relation, sql, replace_existing=false, from_relation=none) -%}
     {{ risingwave__render_sql_header() }}
 
     {%- set _format_parameters = config.get("format_parameters") -%}
@@ -296,12 +316,17 @@
     {%- set _connector_parameters = config.require("connector_parameters") -%}
     {%- set connector = config.require("connector") -%}
 
+    {% if replace_existing -%}
+    replace sink {{ relation }}
+        from {{ from_relation }}
+    {%- else -%}
     create sink if not exists {{ relation }}
       {% if "select" in sql.lower() -%}
         as {{ sql }}
       {%- else -%}
         from {{ sql }}
       {%- endif %}
+    {%- endif %}
     with (
           connector = '{{ connector }}',
           {%- for key, value in _connector_parameters.items() %}
@@ -318,6 +343,16 @@
     )
     {%- endif -%}
     ;
+{%- endmacro %}
+
+
+{% macro risingwave__create_sink(relation, sql) -%}
+    {{ risingwave__sink_ddl(relation, sql) }}
+{%- endmacro %}
+
+
+{% macro risingwave__replace_sink(relation, from_relation) -%}
+    {{ risingwave__sink_ddl(relation, none, replace_existing=true, from_relation=from_relation) }}
 {%- endmacro %}
 
 {% macro risingwave__create_subscription(relation, sql) -%}
@@ -421,6 +456,11 @@
   {% if not risingwave__background_ddl_enabled() %}
     {{ return("") }}
   {% endif %}
+  {% do run_query('WAIT') %}
+{% endmacro %}
+
+{% macro risingwave__wait_for_replace_sink() %}
+  {# RisingWave forces replacement sinks to background creation for recovery safety. #}
   {% do run_query('WAIT') %}
 {% endmacro %}
 

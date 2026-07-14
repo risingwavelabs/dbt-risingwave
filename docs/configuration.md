@@ -361,8 +361,11 @@ Limitations:
 
 ### Zero-Downtime Rebuilds
 
-`materialized_view` and `view` support swap-based zero-downtime rebuilds.
-Temporary cleanup is dependency-safe: if downstream objects still reference the swapped-out temporary object, cleanup preserves it instead of using `CASCADE`.
+`materialized_view` and `view` support swap-based zero-downtime rebuilds. Adapter-managed
+`sink` models can use `REPLACE SINK` for zero-downtime cut-over when the model SQL renders
+to one upstream relation. Temporary cleanup for views and materialized views is
+dependency-safe: if downstream objects still reference the swapped-out temporary object,
+cleanup preserves it instead of using `CASCADE`.
 
 ```sql
 {{ config(
@@ -416,6 +419,40 @@ Supported sink-specific configs:
 | `data_format` | No | Sink format used in `FORMAT ...`. |
 | `data_encode` | No | Sink encoding used in `ENCODE ...`. |
 | `format_parameters` | No | Extra format/encode options emitted inside `FORMAT ... ENCODE ... (...)`. |
+| `zero_downtime` | No | Set `{'enabled': true}` to allow an existing sink to be cut over with `REPLACE SINK` when the runtime flag is also enabled. |
+
+Zero-downtime sink replacement requires a RisingWave build containing `REPLACE SINK`
+(planned for RisingWave v3.1.0). The current RisingWave implementation accepts only
+`REPLACE SINK ... FROM relation`, so the model body must render to one relation rather than
+a `SELECT` query:
+
+```sql
+{{ config(
+    materialized='sink',
+    connector='kafka',
+    connector_parameters={
+      'topic': 'orders',
+      'properties.bootstrap.server': '127.0.0.1:9092'
+    },
+    data_format='plain',
+    data_encode='json',
+    format_parameters={},
+    zero_downtime={'enabled': true}
+) }}
+
+{{ ref('orders_mv') }}
+```
+
+Run the replacement without `--full-refresh`:
+
+```bash
+dbt run --select orders_sink --vars 'zero_downtime: true'
+```
+
+Raw sink DDL and query-based `CREATE SINK ... AS SELECT ...` models are not rewritten.
+RisingWave also currently rejects replacement for exactly-once sinks, sink-into-table,
+auto schema change sinks, and sinks using `since_timestamp`. `REPLACE SINK` starts at the
+cut-over barrier with `snapshot=false`; it does not reload historical rows.
 
 ### Raw SQL Sink DDL
 
@@ -446,7 +483,7 @@ Examples include:
 - `retention_seconds` on `CREATE SUBSCRIPTION` instead of `retention`
 - dbt model config keys that this adapter does not render, such as `retention_seconds` as model config
 - subscription-only configs such as `retention` or `subscription_options` on non-`subscription` materializations
-- `zero_downtime` on materializations other than `materialized_view` and `view`
+- `zero_downtime` on materializations other than `materialized_view`, `view`, and `sink`
 - PostgreSQL index options `unique` and `type`, which RisingWave ignores
 
 Warnings are enabled by default. Projects can make them fail compilation or disable them:

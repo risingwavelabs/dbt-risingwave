@@ -68,9 +68,13 @@ See [docs/configuration.md](docs/configuration.md) for supported materialization
 
 ### Zero-Downtime Rebuilds
 
-`materialized_view` and `view` support swap-based zero-downtime rebuilds through `zero_downtime={'enabled': true}` plus the runtime flag `--vars 'zero_downtime: true'`.
+`materialized_view` and `view` support swap-based zero-downtime rebuilds. Supported
+adapter-managed `sink` models can use RisingWave `REPLACE SINK` for cut-over. Both paths
+require `zero_downtime={'enabled': true}` plus the runtime flag
+`--vars 'zero_downtime: true'`.
 
-See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for requirements, cleanup behavior, and helper commands.
+See [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md) for requirements,
+current sink limitations, cleanup behavior, and helper commands.
 
 ### Functions
 
@@ -175,7 +179,7 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 - [docs/README.md](docs/README.md): documentation index
 - [docs/configuration.md](docs/configuration.md): profile options, model configs, sink settings, and background DDL usage
 - [docs/functions.md](docs/functions.md): first-version RisingWave scalar function support and limitations
-- [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md): zero-downtime rebuild behavior for materialized views and views
+- [docs/zero-downtime-rebuilds.md](docs/zero-downtime-rebuilds.md): zero-downtime rebuilds for views and materialized views, plus supported sink cut-overs
 
 ## dbt Run Behavior
 

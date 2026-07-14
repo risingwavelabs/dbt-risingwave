@@ -46,6 +46,18 @@ where not exists (
 
 union all
 
+select 'replaceable_blackhole_sink must be a sink' as failure
+where not exists (
+    select 1
+    from rw_relations
+    join rw_schemas on schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ target.schema }}'
+      and rw_relations.name = 'replaceable_blackhole_sink'
+      and rw_relations.relation_type = 'sink'
+)
+
+union all
+
 select 'sink_source_mv has unexpected row count' as failure
 where (select count(*) from {{ ref('sink_source_mv') }}) != 2
 
