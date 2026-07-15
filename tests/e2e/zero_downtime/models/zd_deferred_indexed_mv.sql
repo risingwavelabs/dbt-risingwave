@@ -15,10 +15,10 @@
 
 select
     cast(1 as int) as id,
-    cast('{{ stage }}_mv_alpha' as varchar) as payload,
+    cast('{{ stage }}_deferred_alpha' as varchar) as payload,
     cast('{{ stage }}' as varchar) as deploy_stage
 union all
 select
     cast(2 as int) as id,
-    cast('{{ stage }}_mv_beta' as varchar) as payload,
+    cast('{{ stage }}_deferred_beta' as varchar) as payload,
     cast('{{ stage }}' as varchar) as deploy_stage
