@@ -11,7 +11,42 @@ cd "$(dirname "$0")/.."
 # behind (also covers the case where this script is sourced rather than run).
 TEST_ENV_VARS="DBT_RW_INDEX_STAGE DBT_RW_INDEX_EXPECT_STAGE DBT_RW_ZERO_DOWNTIME_STAGE DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED"
 cleanup_env() { unset $TEST_ENV_VARS 2>/dev/null || true; }
-trap cleanup_env EXIT
+
+# Colours, only when stdout is a terminal (so piping to a file stays clean).
+if [ -t 1 ]; then
+	C_GREEN=$(printf '\033[32m'); C_RED=$(printf '\033[31m'); C_DIM=$(printf '\033[2m'); C_OFF=$(printf '\033[0m')
+else
+	C_GREEN=''; C_RED=''; C_DIM=''; C_OFF=''
+fi
+
+# Run one step with tidy output: capture its log, collapse to a single green
+# line on success, and only dump the full log (indented) when it fails — so a
+# failure stands out instead of being buried in a wall of dbt output. The step
+# label is remembered so the exit banner can name whatever failed.
+CURRENT_STEP=''
+step() {
+	CURRENT_STEP="$1"; shift
+	step_out=$("$@" 2>&1) && step_rc=0 || step_rc=$?
+	if [ "$step_rc" -eq 0 ]; then
+		printf '  %s✓%s %s\n' "$C_GREEN" "$C_OFF" "$CURRENT_STEP"
+	else
+		printf '  %s✗ %s (exit %s)%s\n' "$C_RED" "$CURRENT_STEP" "$step_rc" "$C_OFF"
+		# Strip dbt's own ANSI colours, then indent, so the dumped log reads cleanly.
+		printf '%s\n' "$step_out" | sed "s/$(printf '\033')\[[0-9;]*m//g" | sed 's/^/      | /'
+		return "$step_rc"
+	fi
+}
+
+on_exit() {
+	rc=$?
+	cleanup_env
+	if [ "$rc" -eq 0 ]; then
+		printf '\n%s========== all steps passed ==========%s\n' "$C_GREEN" "$C_OFF"
+	else
+		printf '\n%s========== FAILED at: %s ==========%s\n' "$C_RED" "${CURRENT_STEP:-?}" "$C_OFF" >&2
+	fi
+}
+trap on_exit EXIT
 cleanup_env
 
 # RisingWave connection, matching the profiles setup.sh writes and the
@@ -27,7 +62,6 @@ RW_SCHEMA="${DBT_SCHEMA:-public}"
 # any leftover temp object from an interrupted run in one shot. Uses psycopg2,
 # the adapter's own driver, since the image has no psql.
 reset_risingwave() {
-	echo "---------- reset ${RW_DBNAME}.${RW_SCHEMA} ----------"
 	RW_HOST="$RW_HOST" RW_PORT="$RW_PORT" RW_USER="$RW_USER" RW_DBNAME="$RW_DBNAME" RW_SCHEMA="$RW_SCHEMA" \
 		python3 - <<'PY'
 import os, sys
@@ -53,24 +87,24 @@ PY
 
 run_indexes() {
 	echo "========== indexes =========="
-	reset_risingwave
+	step "reset RisingWave" reset_risingwave
 	cd tests/e2e/indexes
-	DBT_RW_INDEX_STAGE=initial dbt run --full-refresh
-	DBT_RW_INDEX_EXPECT_STAGE=initial dbt test
-	DBT_RW_INDEX_STAGE=changed dbt run
-	DBT_RW_INDEX_EXPECT_STAGE=changed dbt test
+	step "initial run"  env DBT_RW_INDEX_STAGE=initial dbt run --full-refresh
+	step "initial test" env DBT_RW_INDEX_EXPECT_STAGE=initial dbt test
+	step "changed run"  env DBT_RW_INDEX_STAGE=changed dbt run
+	step "changed test" env DBT_RW_INDEX_EXPECT_STAGE=changed dbt test
 	cd - >/dev/null
 }
 
 run_zero_downtime() {
 	echo "========== zero_downtime =========="
-	reset_risingwave
+	step "reset RisingWave" reset_risingwave
 	cd tests/e2e/zero_downtime
-	DBT_RW_ZERO_DOWNTIME_STAGE=initial dbt run --full-refresh
-	DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE=initial dbt test
-	DBT_RW_ZERO_DOWNTIME_STAGE=changed dbt run --vars '{zero_downtime: true}'
-	dbt run-operation cleanup_temp_objects
-	DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE=changed DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED=true dbt test
+	step "initial run"         env DBT_RW_ZERO_DOWNTIME_STAGE=initial dbt run --full-refresh
+	step "initial test"        env DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE=initial dbt test
+	step "zero-downtime swap"  env DBT_RW_ZERO_DOWNTIME_STAGE=changed dbt run --vars '{zero_downtime: true}'
+	step "cleanup temp objects" dbt run-operation cleanup_temp_objects
+	step "changed test"        env DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE=changed DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED=true dbt test
 	cd - >/dev/null
 }
 
@@ -80,5 +114,3 @@ case "${1:-both}" in
 	both)          run_indexes; run_zero_downtime ;;
 	*) echo "Usage: $0 [index|zero_downtime|both]" >&2; exit 2 ;;
 esac
-
-echo "========== done =========="
