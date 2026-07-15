@@ -210,6 +210,22 @@
      "{{ db_name }}"."{{ schema_name }}"."{{ index_name }}";
 {%- endmacro -%}
 
+{#-- Drop the indexes the model configures, resolved by their target-derived
+     names. Used after a zero-downtime swap: those indexes are left bound to the
+     old materialized view (now temp-named) under the target name, which would
+     otherwise make re-creation on the swapped-in view a no-op and block cleanup
+     of the temp relation. --#}
+{%- macro risingwave__drop_configured_indexes(relation) -%}
+  {%- set indexes = config.get('indexes', []) -%}
+  {%- for index_dict in indexes -%}
+    {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
+    {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
+    {% call statement('drop_configured_index') -%}
+      {{ risingwave__get_drop_index_sql(relation, index_name) }}
+    {%- endcall %}
+  {%- endfor -%}
+{%- endmacro -%}
+
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
