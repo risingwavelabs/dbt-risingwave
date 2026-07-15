@@ -4,11 +4,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-# CI runs each dbt step with a pristine environment containing only the one
-# variable it declares. Locally the script inherits your shell, so a stale
-# `export DBT_RW_*` from an earlier run would silently leak into a step that
-# doesn't set it. Clear them up front, and again on exit so nothing is left
-# behind (also covers the case where this script is sourced rather than run).
+# CI gives each dbt step a pristine env with only the var it declares. Locally we
+# inherit the shell, so clear these up front and on exit to avoid stale leakage.
 TEST_ENV_VARS="DBT_RW_INDEX_STAGE DBT_RW_INDEX_EXPECT_STAGE DBT_RW_ZERO_DOWNTIME_STAGE DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE DBT_RW_ZERO_DOWNTIME_EXPECT_TEMP_CLEANED"
 cleanup_env() { unset $TEST_ENV_VARS 2>/dev/null || true; }
 
@@ -19,10 +16,8 @@ else
 	C_GREEN=''; C_RED=''; C_DIM=''; C_OFF=''
 fi
 
-# Run one step with tidy output: capture its log, collapse to a single green
-# line on success, and only dump the full log (indented) when it fails — so a
-# failure stands out instead of being buried in a wall of dbt output. The step
-# label is remembered so the exit banner can name whatever failed.
+# Run a step with tidy output: one green line on success, the full indented log
+# only on failure so it stands out. Remembers the label for the exit banner.
 CURRENT_STEP=''
 step() {
 	CURRENT_STEP="$1"; shift
@@ -57,10 +52,8 @@ RW_USER="${DBT_USER:-root}"
 RW_DBNAME="${DBT_DBNAME:-dev}"
 RW_SCHEMA="${DBT_SCHEMA:-public}"
 
-# Start each flow from an empty database, the way CI does (a fresh RisingWave
-# container per job). Dropping the schema CASCADE clears every model, index and
-# any leftover temp object from an interrupted run in one shot. Uses psycopg2,
-# the adapter's own driver, since the image has no psql.
+# Start each flow from an empty schema like CI's fresh container: DROP SCHEMA
+# CASCADE clears all models, indexes and leftover temp objects. psycopg2, no psql.
 reset_risingwave() {
 	RW_HOST="$RW_HOST" RW_PORT="$RW_PORT" RW_USER="$RW_USER" RW_DBNAME="$RW_DBNAME" RW_SCHEMA="$RW_SCHEMA" \
 		python3 - <<'PY'

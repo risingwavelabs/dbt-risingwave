@@ -76,10 +76,7 @@
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
-      {# The swap leaves the model's indexes bound to the old MV (now temp-named)
-         under the target-derived names. Drop them so the names free up for the
-         swapped-in MV re-created below, and the temp relation loses the
-         dependents that would otherwise block cleanup. #}
+      {# The swap leaves the old indexes on the now temp-named MV; drop them so the names free up for re-creation below and don't block cleanup. #}
       {{ risingwave__drop_configured_indexes(target_relation) }}
 
       {# Step 3: Conditionally drop the old materialized view (now with temp name) #}

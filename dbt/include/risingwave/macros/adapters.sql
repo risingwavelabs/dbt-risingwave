@@ -210,11 +210,7 @@
      "{{ db_name }}"."{{ schema_name }}"."{{ index_name }}";
 {%- endmacro -%}
 
-{#-- Drop the indexes the model configures, resolved by their target-derived
-     names. Used after a zero-downtime swap: those indexes are left bound to the
-     old materialized view (now temp-named) under the target name, which would
-     otherwise make re-creation on the swapped-in view a no-op and block cleanup
-     of the temp relation. --#}
+{# Drop the model's configured indexes by their target-derived names. After a zero-downtime swap they sit on the old temp-named MV, blocking re-creation and cleanup. #}
 {%- macro risingwave__drop_configured_indexes(relation) -%}
   {%- set indexes = config.get('indexes', []) -%}
   {%- for index_dict in indexes -%}
