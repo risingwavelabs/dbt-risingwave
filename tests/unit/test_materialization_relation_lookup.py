@@ -156,6 +156,32 @@ def test_zero_downtime_immediate_cleanup_is_dependency_safe():
     assert "DROP VIEW IF EXISTS {{ obj_relation }} CASCADE" not in adapter_macros
 
 
+def test_zero_downtime_materialized_view_prebuilds_and_promotes_indexes():
+    materialized_view = (MATERIALIZATION_DIR / "materialized_view.sql").read_text()
+    adapter_macros = ADAPTER_MACROS.read_text()
+
+    create_temp = "risingwave__create_materialized_view_with_temp_name(temp_relation, sql)"
+    build_indexes = "create_indexes(temp_relation)"
+    swap = "risingwave__swap_materialized_views(old_relation, temp_relation)"
+    handoff = "risingwave__handoff_zero_downtime_indexes(temp_relation, target_relation)"
+    cleanup = "risingwave__drop_zero_downtime_temp_relation(temp_relation)"
+
+    assert materialized_view.index(create_temp) < materialized_view.index(build_indexes)
+    assert materialized_view.index(build_indexes) < materialized_view.index(swap)
+    assert materialized_view.index(swap) < materialized_view.index(handoff)
+    assert materialized_view.index(handoff) < materialized_view.index(cleanup)
+    assert (
+        "create_indexes(target_relation)"
+        not in materialized_view[materialized_view.index(handoff) :]
+    )
+
+    assert "macro risingwave__get_rename_index_sql" in adapter_macros
+    assert "macro risingwave__handoff_zero_downtime_indexes" in adapter_macros
+    assert "retire_zero_downtime_index_" in adapter_macros
+    assert "promote_zero_downtime_index_" in adapter_macros
+    assert "dependent_relation.relation_type != 'index'" in adapter_macros
+
+
 def test_sink_zero_downtime_uses_replace_sink_for_from_relation():
     sink = (MATERIALIZATION_DIR / "sink.sql").read_text()
     adapter_macros = ADAPTER_MACROS.read_text()

@@ -598,6 +598,12 @@ jobs:
       working-directory: tests/e2e/zero_downtime
       env:
         DBT_RW_ZERO_DOWNTIME_STAGE: changed
+    - name: dbt-test-zero-downtime-index-handoff
+      run: dbt test --select assert_zero_downtime_index
+      working-directory: tests/e2e/zero_downtime
+      env:
+        DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: changed
+        DBT_RW_ZERO_DOWNTIME_EXPECT_INDEX_TEMP: "true"
     - name: dbt-cleanup-zero-downtime-temp-objects
       run: dbt run-operation cleanup_temp_objects
       working-directory: tests/e2e/zero_downtime
