@@ -6,6 +6,7 @@
 
 {{ config(
     materialized='materialized_view',
+    indexes=[{'columns': ['id'], 'include': ['payload']}],
     background_ddl=true,
     zero_downtime={
       'enabled': true,
