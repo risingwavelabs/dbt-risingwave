@@ -172,3 +172,21 @@ where exists (
     from {{ ref('zd_chain_final_mv') }}
     where transform_version != '{{ expected_stage }}'
 )
+
+union all
+
+-- Key check: after the swap, pg_class.relname = 'zd_events_mv' resolves to the
+-- swapped-in MV. Fail if no index of the expected name is linked to it, i.e. the
+-- index was left on the old (temp-named) MV or never (re)created on the new one.
+select '__dbt_index_zd_events_mv_id must be linked to the swapped-in zd_events_mv' as failure
+where not exists (
+    select 1
+    from pg_index ix
+    join pg_class i on i.oid = ix.indexrelid
+    join pg_class t on t.oid = ix.indrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = '{{ target.schema }}'
+      and t.relname = 'zd_events_mv'
+      and i.relname = '__dbt_index_zd_events_mv_id'
+      and ix.indisprimary = false
+)
