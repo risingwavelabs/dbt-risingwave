@@ -156,6 +156,23 @@ def test_zero_downtime_immediate_cleanup_is_dependency_safe():
     assert "DROP VIEW IF EXISTS {{ obj_relation }} CASCADE" not in adapter_macros
 
 
+def test_cleanup_temp_objects_retries_until_fixed_point():
+    adapter_macros = ADAPTER_MACROS.read_text()
+    macro_start = adapter_macros.index(
+        "{%- macro risingwave__cleanup_temp_objects"
+    )
+    macro_end = adapter_macros.index("{%- endmacro %}", macro_start)
+    cleanup_macro = adapter_macros[macro_start:macro_end]
+
+    assert cleanup_macro.count(
+        "risingwave__list_temp_objects(schema_name, object_types)"
+    ) == 3
+    assert "namespace(active=true, dropped=0)" in cleanup_macro
+    assert "for cleanup_pass in range(1, (temp_objects | length) + 1)" in cleanup_macro
+    assert "pass_state.dropped == 0" in cleanup_macro
+    assert "Preserved " in cleanup_macro
+
+
 def test_zero_downtime_materialized_view_prebuilds_and_promotes_indexes():
     materialized_view = (MATERIALIZATION_DIR / "materialized_view.sql").read_text()
     adapter_macros = ADAPTER_MACROS.read_text()

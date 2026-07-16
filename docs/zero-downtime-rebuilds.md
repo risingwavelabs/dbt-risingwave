@@ -149,7 +149,14 @@ Then run cleanup after dependent models have been rebuilt:
 dbt run-operation cleanup_temp_objects
 ```
 
-The cleanup helper also skips temporary objects that still have dependents. Run it again after rebuilding more downstream objects if it reports preserved objects.
+One cleanup invocation repeatedly removes the current dependency-safe leaf objects until
+it reaches a fixed point. This fully drains a rebuilt multi-level temporary chain in the
+same invocation, regardless of object-name order. The helper never uses `CASCADE`.
+
+If non-temporary objects still reference a temporary object, cleanup preserves it and
+reports the remaining objects. Rebuild those downstream objects before running cleanup
+again. A dry run reports what is safe in the current catalog state; it does not simulate
+the additional objects that would become safe after those reported drops.
 
 ## When Zero-Downtime Mode Applies
 
