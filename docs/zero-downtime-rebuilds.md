@@ -27,10 +27,21 @@ This keeps the original object name available during the update.
 When a model already exists and zero downtime is enabled, the adapter:
 
 1. Creates a temporary object with the new definition.
-2. Swaps the temporary object with the original object.
-3. Either preserves or safely drops the old object, depending on `immediate_cleanup` and remaining dependencies.
+2. For an indexed materialized view, builds the configured indexes on the temporary
+   object and waits for their backfill to finish.
+3. Swaps the temporary object with the original object.
+4. Promotes the prebuilt indexes to their canonical dbt names. If a previous index
+   already owns a canonical name, it is renamed and remains attached to the old object.
+5. Either preserves or safely drops the old object, depending on `immediate_cleanup`
+   and remaining dependencies.
 
 Temporary objects use the naming pattern `{original_name}_dbt_zero_down_tmp_{timestamp}`.
+
+RisingWave does not provide an atomic `ALTER INDEX ... SWAP WITH ...` command. The
+adapter instead creates each new index under a unique temporary name, waits for it,
+and performs metadata-only index renames after the materialized-view swap. Queries
+always have a ready index attached to the active materialized view; only the index
+name handoff is non-atomic.
 
 For a supported sink, the adapter instead issues `REPLACE SINK` directly. RisingWave
 creates a replacement sink job, drains the old sink at the cut-over barrier, and exposes
@@ -120,6 +131,11 @@ To try to drop the temporary object immediately after the swap:
 ```
 
 Immediate cleanup is dependency-safe and best-effort. RisingWave `SWAP WITH` keeps existing downstream objects attached to the pre-swap object ID, now renamed to the temporary object. If any dependent object still references that temporary object, the adapter preserves it even when `immediate_cleanup` is `true`; it does not use `CASCADE` for zero-downtime temporary object cleanup.
+
+Indexes owned by a temporary materialized view do not by themselves prevent cleanup.
+RisingWave drops those indexes together with their parent materialized view. They are
+kept while the old materialized view is preserved, so downstream users of the old
+object do not lose its index before the object is safe to remove.
 
 For a chain such as `mv1 -> mv2 -> mv3`, updating only `mv1` can leave `mv2` and `mv3` reading from the preserved temporary `mv1` object. Rebuild dependent models when they should move to the new upstream definition:
 

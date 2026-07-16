@@ -210,6 +210,67 @@
      "{{ db_name }}"."{{ schema_name }}"."{{ index_name }}";
 {%- endmacro -%}
 
+{%- macro risingwave__get_rename_index_sql(relation, old_index_name, new_index_name) -%}
+    {%- set db_name = relation.database -%}
+    {%- set schema_name = relation.schema -%}
+
+    alter index
+     "{{ db_name }}"."{{ schema_name }}"."{{ old_index_name }}"
+    rename to "{{ new_index_name }}";
+{%- endmacro -%}
+
+{%- macro risingwave__handoff_zero_downtime_indexes(staged_relation, target_relation) -%}
+  {%- set index_configs = config.get('indexes', []) -%}
+  {%- set target_identifier = target_relation.identifier -%}
+  {%- set target_schema_literal = target_relation.schema | replace("'", "''") -%}
+  {%- set temp_prefix = target_relation.identifier ~ "_dbt_zero_down_tmp_" -%}
+
+  {% for index_dict in index_configs %}
+    {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
+    {%- set canonical_name = risingwave__get_index_name(target_relation.identifier, index_config.columns) -%}
+    {%- set staged_name = risingwave__get_index_name(staged_relation.identifier, index_config.columns) -%}
+    {%- set retired_name = "__dbt_retired_index_{}_{}".format(staged_relation.identifier, loop.index) -%}
+    {%- set canonical_name_literal = canonical_name | replace("'", "''") -%}
+    {%- set result_name = 'zero_downtime_canonical_index_' ~ loop.index -%}
+
+    {# A failed prior run may have left the canonical name on an older temp MV. #}
+    {% call statement(result_name, fetch_result=True) -%}
+      select t.relname as parent_name
+      from pg_index ix
+      join pg_class i on i.oid = ix.indexrelid
+      join pg_class t on t.oid = ix.indrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = '{{ target_schema_literal }}'
+        and i.relname = '{{ canonical_name_literal }}'
+        and ix.indisprimary = false
+    {%- endcall %}
+
+    {%- set canonical_index = load_result(result_name).table -%}
+    {% if canonical_index is not none and canonical_index.rows | length > 0 %}
+      {%- set canonical_parent = canonical_index.rows[0][0] -%}
+      {% if canonical_parent == target_identifier %}
+        {{ exceptions.raise_compiler_error(
+          "Cannot promote staged index " ~ staged_name ~ " because " ~ canonical_name
+          ~ " is already attached to target relation " ~ target_relation
+        ) }}
+      {% elif not canonical_parent.startswith(temp_prefix) %}
+        {{ exceptions.raise_compiler_error(
+          "Cannot promote staged index " ~ staged_name ~ " because " ~ canonical_name
+          ~ " is owned by unrelated relation " ~ canonical_parent
+        ) }}
+      {% endif %}
+
+      {% call statement('retire_zero_downtime_index_' ~ loop.index) -%}
+        {{ risingwave__get_rename_index_sql(target_relation, canonical_name, retired_name) }}
+      {%- endcall %}
+    {% endif %}
+
+    {% call statement('promote_zero_downtime_index_' ~ loop.index) -%}
+      {{ risingwave__get_rename_index_sql(target_relation, staged_name, canonical_name) }}
+    {%- endcall %}
+  {% endfor %}
+{%- endmacro -%}
+
 {% macro risingwave__drop_relation(relation) -%}
   {% call statement('drop_relation') -%}
     {% if relation.type == 'view' %}
@@ -679,10 +740,19 @@
     select exists (
       select 1
       from rw_catalog.rw_depend
-      join rw_catalog.rw_relations on rw_depend.refobjid = rw_relations.id
-      join rw_catalog.rw_schemas on rw_relations.schema_id = rw_schemas.id
+      join rw_catalog.rw_relations referenced_relation
+        on rw_depend.refobjid = referenced_relation.id
+      join rw_catalog.rw_schemas
+        on referenced_relation.schema_id = rw_schemas.id
+      left join rw_catalog.rw_relations dependent_relation
+        on rw_depend.objid = dependent_relation.id
       where rw_schemas.name = '{{ relation_schema }}'
-        and rw_relations.name = '{{ relation_identifier }}'
+        and referenced_relation.name = '{{ relation_identifier }}'
+        -- Indexes are owned by their parent relation and are dropped with it.
+        and (
+          dependent_relation.relation_type is null
+          or dependent_relation.relation_type != 'index'
+        )
     ) as has_dependents
   {%- endcall %}
 

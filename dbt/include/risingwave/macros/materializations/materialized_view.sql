@@ -71,12 +71,19 @@
       {%- endcall %}
       {{ risingwave__wait_for_background_ddl(temp_relation, 'materialized_view') }}
 
-      {# Step 2: Swap the materialized views #}
+      {# Step 2: Build indexes before cut-over so the new MV is fully indexed at swap time #}
+      {{ create_indexes(temp_relation) }}
+      {{ risingwave__wait_for_background_indexes(temp_relation) }}
+
+      {# Step 3: Swap the materialized views #}
       {% call statement('swap') -%}
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
-      {# Step 3: Conditionally drop the old materialized view (now with temp name) #}
+      {# Step 4: Free canonical names on old indexes and promote the prebuilt indexes #}
+      {{ risingwave__handoff_zero_downtime_indexes(temp_relation, target_relation) }}
+
+      {# Step 5: Conditionally drop the old materialized view (now with temp name) #}
       {% if immediate_cleanup %}
         {{- log("Attempting immediate cleanup of temporary materialized view: " ~ temp_relation) -}}
         {{ risingwave__drop_zero_downtime_temp_relation(temp_relation) }}
@@ -88,9 +95,6 @@
       {# TODO: Should this be before the swap to ensure actual zero downtime #}
       {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=true) %}
       {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
-
-      {{ create_indexes(target_relation) }}
-      {{ risingwave__wait_for_background_indexes(target_relation) }}
     {% else %}
       {# Zero downtime disabled - either model config or user flag is missing #}
       {% if model_has_zero_downtime and not user_requested_zero_downtime %}
