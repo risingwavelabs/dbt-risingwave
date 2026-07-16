@@ -828,48 +828,94 @@
 
 {%- macro risingwave__cleanup_temp_objects(schema_name=none, object_types=none, older_than_hours=24, dry_run=true) -%}
   {%- set temp_objects = risingwave__list_temp_objects(schema_name, object_types) -%}
-  
-  {% if temp_objects %}
-    {{ print("Found " ~ temp_objects | length ~ " temporary objects") }}
-    
+  {%- set obj_type_mapping = {
+      'materialized view': 'materialized_view',
+      'view': 'view',
+      'sink': 'sink'
+  } -%}
+
+  {% if not temp_objects %}
+    {{ print("No temporary objects found") }}
+  {% elif dry_run %}
+    {%- set object_label = "temporary object" if temp_objects | length == 1 else "temporary objects" -%}
+    {{ print("Found " ~ temp_objects | length ~ " " ~ object_label) }}
+
     {% for temp_obj in temp_objects %}
-      {%- set obj_type_mapping = {
-          'materialized view': 'materialized_view',
-          'view': 'view',
-          'sink': 'sink'
-      } -%}
       {%- set dbt_type = obj_type_mapping.get(temp_obj[3], temp_obj[3]) -%}
-      
+
       {%- set obj_relation = api.Relation.create(
           identifier=temp_obj[1],
           schema=temp_obj[0],
           database=database,
           type=dbt_type
       ) -%}
-      
-      {% if dry_run %}
-        {% if risingwave__relation_has_dependents(obj_relation) %}
-          {{ print("DRY RUN: Would preserve " ~ temp_obj[3] ~ " " ~ obj_relation ~ " because dependent objects still reference it") }}
-        {% else %}
-          {{ print("DRY RUN: Would drop " ~ temp_obj[3] ~ " " ~ obj_relation) }}
-        {% endif %}
+
+      {% if risingwave__relation_has_dependents(obj_relation) %}
+        {{ print("DRY RUN: Would preserve " ~ temp_obj[3] ~ " " ~ obj_relation ~ " because dependent objects still reference it") }}
       {% else %}
-        {% if temp_obj[3] == 'materialized view' or temp_obj[3] == 'view' %}
-          {{ risingwave__drop_zero_downtime_temp_relation(obj_relation) }}
-        {% elif temp_obj[3] == 'sink' %}
-          {{ print("Dropping temporary " ~ temp_obj[3] ~ ": " ~ obj_relation) }}
-          {% call statement('drop_temp_obj_' ~ loop.index) -%}
-            DROP SINK IF EXISTS {{ obj_relation }}
-          {%- endcall %}
+        {{ print("DRY RUN: Would drop " ~ temp_obj[3] ~ " " ~ obj_relation) }}
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    {%- set object_label = "temporary object" if temp_objects | length == 1 else "temporary objects" -%}
+    {{ print("Found " ~ temp_objects | length ~ " " ~ object_label) }}
+    {%- set cleanup_state = namespace(active=true, dropped=0) -%}
+
+    {# Each successful pass drops at least one object, so the initial object count
+       is a safe upper bound on the number of passes needed to reach a fixed point. #}
+    {% for cleanup_pass in range(1, (temp_objects | length) + 1) %}
+      {% if cleanup_state.active %}
+        {%- set pass_objects = risingwave__list_temp_objects(schema_name, object_types) -%}
+        {%- set pass_state = namespace(dropped=0) -%}
+
+        {% for temp_obj in pass_objects %}
+          {%- set dbt_type = obj_type_mapping.get(temp_obj[3], temp_obj[3]) -%}
+          {%- set obj_relation = api.Relation.create(
+              identifier=temp_obj[1],
+              schema=temp_obj[0],
+              database=database,
+              type=dbt_type
+          ) -%}
+
+          {%- set dropped = false -%}
+          {% if temp_obj[3] == 'materialized view' or temp_obj[3] == 'view' %}
+            {%- set dropped = risingwave__drop_zero_downtime_temp_relation(obj_relation) -%}
+          {% elif temp_obj[3] == 'sink' %}
+            {{ print("Dropping temporary " ~ temp_obj[3] ~ ": " ~ obj_relation) }}
+            {% call statement('drop_temp_obj_' ~ cleanup_pass ~ '_' ~ loop.index) -%}
+              DROP SINK IF EXISTS {{ obj_relation }}
+            {%- endcall %}
+            {%- set dropped = true -%}
+          {% endif %}
+
+          {% if dropped %}
+            {%- set pass_state.dropped = pass_state.dropped + 1 -%}
+          {% endif %}
+        {% endfor %}
+
+        {%- set cleanup_state.dropped = cleanup_state.dropped + pass_state.dropped -%}
+        {% if pass_state.dropped == 0 %}
+          {%- set cleanup_state.active = false -%}
+        {% else %}
+          {%- set dropped_label = "temporary object" if pass_state.dropped == 1 else "temporary objects" -%}
+          {{ print("Cleanup pass " ~ cleanup_pass ~ " dropped " ~ pass_state.dropped ~ " " ~ dropped_label) }}
         {% endif %}
       {% endif %}
     {% endfor %}
-    
-    {% if not dry_run %}
-      {{ print("Finished cleaning up temporary objects") }}
+
+    {%- set remaining_objects = risingwave__list_temp_objects(schema_name, object_types) -%}
+    {% if remaining_objects %}
+      {%- set remaining_label = "temporary object" if remaining_objects | length == 1 else "temporary objects" -%}
+      {%- set remaining_pronoun = "it" if remaining_objects | length == 1 else "them" -%}
+      {{ print("Preserved " ~ remaining_objects | length ~ " " ~ remaining_label ~ " because dependent objects still reference " ~ remaining_pronoun ~ ":") }}
+      {% for temp_obj in remaining_objects %}
+        {{ print("  - " ~ temp_obj[3] ~ " " ~ temp_obj[0] ~ "." ~ temp_obj[1]) }}
+      {% endfor %}
+    {% else %}
+      {{ print("All temporary objects were cleaned up") }}
     {% endif %}
-  {% else %}
-    {{ print("No temporary objects found") }}
+
+    {{ print("Finished cleaning up temporary objects; dropped " ~ cleanup_state.dropped) }}
   {% endif %}
 {%- endmacro %}
 

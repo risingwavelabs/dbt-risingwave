@@ -29,37 +29,37 @@ where not exists (
 
 union all
 
-select 'zd_chain_source_mv must be a materialized view' as failure
+select 'zd_immediate_a_mv must be a materialized view' as failure
 where not exists (
     select 1
     from rw_relations
     join rw_schemas on schema_id = rw_schemas.id
     where rw_schemas.name = '{{ target.schema }}'
-      and rw_relations.name = 'zd_chain_source_mv'
+      and rw_relations.name = 'zd_immediate_a_mv'
       and rw_relations.relation_type = 'materialized view'
 )
 
 union all
 
-select 'zd_chain_middle_mv must be a materialized view after zero-downtime swap' as failure
+select 'zd_immediate_b_mv must be a materialized view after zero-downtime swap' as failure
 where not exists (
     select 1
     from rw_relations
     join rw_schemas on schema_id = rw_schemas.id
     where rw_schemas.name = '{{ target.schema }}'
-      and rw_relations.name = 'zd_chain_middle_mv'
+      and rw_relations.name = 'zd_immediate_b_mv'
       and rw_relations.relation_type = 'materialized view'
 )
 
 union all
 
-select 'zd_chain_final_mv must be a materialized view after upstream zero-downtime swap' as failure
+select 'zd_immediate_c_mv must be a materialized view after upstream zero-downtime swap' as failure
 where not exists (
     select 1
     from rw_relations
     join rw_schemas on schema_id = rw_schemas.id
     where rw_schemas.name = '{{ target.schema }}'
-      and rw_relations.name = 'zd_chain_final_mv'
+      and rw_relations.name = 'zd_immediate_c_mv'
       and rw_relations.relation_type = 'materialized view'
 )
 

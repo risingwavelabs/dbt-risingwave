@@ -5,21 +5,16 @@
 {% endif %}
 
 {{ config(
-    alias='zd_immediate_b_mv',
+    alias='zd_deferred_a_mv',
     materialized='materialized_view',
     background_ddl=true,
     zero_downtime={
       'enabled': true,
-      'immediate_cleanup': true
+      'immediate_cleanup': false
     }
 ) }}
 
 select
-    id,
-    {% if stage == 'initial' %}
-    amount * 10
-    {% else %}
-    amount * 100 + 7
-    {% endif %} as derived_amount,
-    cast('{{ stage }}' as varchar) as transform_version
-from {{ ref('zd_chain_source_mv') }}
+    cast(1 as int) as id,
+    cast({% if stage == 'initial' %}10{% else %}100{% endif %} as int) as amount,
+    cast('{{ stage }}' as varchar) as deploy_stage

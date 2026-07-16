@@ -604,6 +604,11 @@ jobs:
       env:
         DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: changed
         DBT_RW_ZERO_DOWNTIME_EXPECT_INDEX_TEMP: "true"
+    - name: dbt-test-zero-downtime-cleanup-chains-before-cleanup
+      run: dbt test --select assert_zero_downtime_cleanup_chains
+      working-directory: tests/e2e/zero_downtime
+      env:
+        DBT_RW_ZERO_DOWNTIME_EXPECT_STAGE: changed
     - name: dbt-cleanup-zero-downtime-temp-objects
       run: dbt run-operation cleanup_temp_objects
       working-directory: tests/e2e/zero_downtime

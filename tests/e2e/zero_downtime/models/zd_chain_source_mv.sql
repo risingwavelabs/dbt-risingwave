@@ -1,6 +1,11 @@
 {{ config(
+    alias='zd_immediate_a_mv',
     materialized='materialized_view',
-    background_ddl=true
+    background_ddl=true,
+    zero_downtime={
+      'enabled': true,
+      'immediate_cleanup': true
+    }
 ) }}
 
 select
