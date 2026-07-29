@@ -126,5 +126,13 @@
     ) }}
   {%- endif -%}
 
+  {%- if materialization not in ['materialized_view', 'materializedview'] and config.get('backfill_order', none) is not none -%}
+    {{ risingwave__validation_report(
+      'RW010',
+      "`backfill_order` is only used by materialized-view materializations. It is ignored by `"
+      ~ materialization ~ "`."
+    ) }}
+  {%- endif -%}
+
   {{ risingwave__validate_ignored_index_options(materialization) }}
 {%- endmacro %}

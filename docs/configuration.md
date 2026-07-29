@@ -180,6 +180,82 @@ models:
 
 This emits `set enable_serverless_backfill = true;` before the model DDL runs.
 
+### Backfill Order
+
+RisingWave 2.5 and later can control the initial backfill sequence of upstream
+relations for a materialized view. Configure `backfill_order` as a non-empty
+list of fixed dependency edges:
+
+```sql
+{{ config(
+    materialized='materialized_view',
+    backfill_order=[
+        'analytics.user_history -> analytics.user_events',
+        'analytics.account_history -> analytics.user_events'
+    ]
+) }}
+
+select ...
+from {{ ref('user_events') }}
+join {{ ref('user_history') }} using (user_id)
+join {{ ref('account_history') }} using (account_id)
+```
+
+The adapter renders the list in the materialized-view DDL:
+
+```sql
+create materialized view ...
+with (
+    backfill_order = FIXED(
+        analytics.user_history -> analytics.user_events,
+        analytics.account_history -> analytics.user_events
+    )
+)
+as ...
+```
+
+Each list item is inserted as one RisingWave `FIXED` edge. The adapter validates
+the config shape, while RisingWave validates relation usage, cycles, and the
+resulting graph. Use schema-qualified relation names when upstream relations are
+outside the session search path. Keep `ref()` or `source()` calls in the model
+query so dbt records the dependency graph.
+
+Do not put `ref()` or `source()` directly inside the `backfill_order` config.
+dbt captures config values during parsing, when those functions do not yet
+produce the final upstream relation names. If all upstream relations share the
+model's target schema, you can build portable quoted edges from `this.schema`:
+
+```sql
+{% set edge_schema = adapter.quote(this.schema) %}
+
+{{ config(
+    materialized='materialized_view',
+    backfill_order=[
+        edge_schema ~ '."user_history" -> ' ~ edge_schema ~ '."user_events"'
+    ]
+) }}
+```
+
+Current constraints:
+
+- `backfill_order` is a RisingWave technical-preview feature supported only for
+  materialized views. Cross-database edges are not supported.
+- The option takes effect only when dbt issues `CREATE MATERIALIZED VIEW`, such
+  as on the first run, `--full-refresh`, or a zero-downtime rebuild. Changing
+  the config alone does not alter an existing materialized view.
+- RisingWave can reject a base-table edge when index selection rewrites that
+  scan to an index. Until
+  [risingwavelabs/risingwave#25755](https://github.com/risingwavelabs/risingwave/issues/25755)
+  is fixed, set `enable_index_selection=false` on affected models.
+- RisingWave 2.5 through 2.7 do not restore a fixed order after a background DDL
+  job restarts. Recovery support was added in RisingWave 2.8 by
+  [#24539](https://github.com/risingwavelabs/risingwave/pull/24539) and
+  [#24590](https://github.com/risingwavelabs/risingwave/pull/24590).
+
+See RisingWave's
+[`CREATE MATERIALIZED VIEW` documentation](https://docs.risingwave.com/sql/commands/sql-create-mv#backfill-behavior-and-controls)
+for edge semantics and progress-inspection commands.
+
 ### Background DDL
 
 `dbt-risingwave` supports opting into RisingWave background DDL for these paths:

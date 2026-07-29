@@ -57,6 +57,36 @@
   {{- header_parts | join("\n") -}}
 {%- endmacro %}
 
+{% macro risingwave__render_materialized_view_options() -%}
+  {%- set backfill_order = config.get("backfill_order", none) -%}
+  {%- if backfill_order is none -%}
+    {{- return("") -}}
+  {%- endif -%}
+
+  {%- if backfill_order is string
+      or backfill_order is mapping
+      or backfill_order is not sequence
+      or backfill_order | length == 0 -%}
+    {{ exceptions.raise_compiler_error(
+      "`backfill_order` must be a non-empty list of RisingWave FIXED backfill edges, "
+      ~ "for example [`schema.dim -> schema.fact`]."
+    ) }}
+  {%- endif -%}
+
+  {%- set edges = [] -%}
+  {%- for edge in backfill_order -%}
+    {%- if edge is not string or edge | trim == "" -%}
+      {{ exceptions.raise_compiler_error(
+        "Each `backfill_order` entry must be a non-empty string containing a RisingWave "
+        ~ "backfill edge; invalid entry at position " ~ loop.index ~ "."
+      ) }}
+    {%- endif -%}
+    {%- do edges.append(edge | trim) -%}
+  {%- endfor -%}
+
+  with (backfill_order = FIXED({{ edges | join(", ") }}))
+{%- endmacro %}
+
 {% macro risingwave__list_relations_without_caching(schema_relation) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     with rw_schema_relations as (
@@ -338,6 +368,7 @@
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
+    {{ risingwave__render_materialized_view_options() }}
   as {{ sql }}
   ;
 {%- endmacro %}
@@ -708,6 +739,7 @@
     {% if contract_config.enforced %}
       {{ get_assert_columns_equivalent(sql) }}
     {%- endif %}
+    {{ risingwave__render_materialized_view_options() }}
   as {{ sql }}
   ;
 {%- endmacro %}

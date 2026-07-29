@@ -60,6 +60,16 @@ Use `enable_serverless_backfill=true` in a model config or profile to enable ser
 
 See [docs/configuration.md](docs/configuration.md) for examples.
 
+### Backfill Order Control
+
+Materialized-view models can use `backfill_order` to render RisingWave's
+`WITH (backfill_order = FIXED(...))` option from a list of dependency edges.
+The model query should continue to use `ref()` or `source()` so dbt records the
+dependency graph.
+
+See [docs/configuration.md](docs/configuration.md#backfill-order) for examples,
+requirements, and RisingWave limitations.
+
 ### Background DDL
 
 `background_ddl=true` lets supported materializations submit background DDL while still preserving dbt semantics by issuing RisingWave `WAIT` before dbt continues.

@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+from dbt_common.clients.jinja import CallableMacroGenerator, MacroReturn
+
 
 MATERIALIZATION_DIR = (
     Path(__file__).resolve().parents[2]
@@ -109,8 +112,75 @@ def test_adapter_validation_rules_are_documented_in_macro():
     assert "`indexes[].unique` is a PostgreSQL adapter option" in validation_macros
     assert "`indexes[].type` is a PostgreSQL adapter option" in validation_macros
     assert "`zero_downtime` is only supported" in validation_macros
+    assert (
+        "`backfill_order` is only used by materialized-view materializations" in validation_macros
+    )
     assert "RW001" in validation_macros
     assert "RW009" in validation_macros
+    assert "RW010" in validation_macros
+
+
+def test_backfill_order_renders_fixed_materialized_view_option():
+    rendered = render_adapter_macro(
+        "risingwave__render_materialized_view_options",
+        {
+            "backfill_order": [
+                " public.dim -> public.fact ",
+                '"Sales Schema"."History" -> "Sales Schema"."Events"',
+            ]
+        },
+    )
+
+    assert rendered == (
+        "with (backfill_order = FIXED("
+        "public.dim -> public.fact, "
+        '"Sales Schema"."History" -> "Sales Schema"."Events"))'
+    )
+
+
+def test_unset_backfill_order_does_not_render_materialized_view_options():
+    assert (
+        render_adapter_macro(
+            "risingwave__render_materialized_view_options",
+            {},
+        )
+        == ""
+    )
+
+
+@pytest.mark.parametrize(
+    "backfill_order",
+    [
+        [],
+        "public.dim -> public.fact",
+        {"dim": "fact"},
+        ["public.dim -> public.fact", 42],
+        ["public.dim -> public.fact", "  "],
+    ],
+)
+def test_backfill_order_rejects_invalid_config(backfill_order):
+    with pytest.raises(ValueError, match="backfill_order"):
+        render_adapter_macro(
+            "risingwave__render_materialized_view_options",
+            {"backfill_order": backfill_order},
+        )
+
+
+def test_backfill_order_is_rendered_for_normal_and_zero_downtime_mv_creation():
+    adapter_macros = ADAPTER_MACROS.read_text()
+
+    for macro_name in (
+        "risingwave__create_materialized_view_as",
+        "risingwave__create_materialized_view_with_temp_name",
+    ):
+        macro_start = adapter_macros.index(f"macro {macro_name}")
+        macro_end = adapter_macros.index("endmacro", macro_start)
+        macro = adapter_macros[macro_start:macro_end]
+
+        assert macro.count("risingwave__render_materialized_view_options()") == 1
+        assert macro.index("risingwave__render_materialized_view_options()") < macro.index(
+            "as {{ sql }}"
+        )
 
 
 def test_adapter_validation_is_wired_into_materializations():
@@ -276,3 +346,21 @@ def load_local_connections_module():
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def render_adapter_macro(name, config, *args):
+    def dbt_return(value):
+        raise MacroReturn(value)
+
+    def raise_compiler_error(message):
+        raise ValueError(message)
+
+    macro = SimpleNamespace(name=name, macro_sql=ADAPTER_MACROS.read_text())
+    context = {
+        "config": config,
+        "exceptions": SimpleNamespace(
+            raise_compiler_error=raise_compiler_error,
+        ),
+        "return": dbt_return,
+    }
+    return CallableMacroGenerator(macro, context)(*args)
