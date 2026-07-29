@@ -34,6 +34,18 @@ where not exists (
 
 union all
 
+select 'ordered_events_mv must be a materialized view' as failure
+where not exists (
+    select 1
+    from rw_relations
+    join rw_schemas on schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ target.schema }}'
+      and rw_relations.name = 'ordered_events_mv'
+      and rw_relations.relation_type = 'materialized view'
+)
+
+union all
+
 select 'base_table has unexpected row count' as failure
 where (select count(*) from {{ ref('base_table') }}) != 2
 
@@ -93,4 +105,25 @@ select 'events_mv missing beta row' as failure
 where not exists (
     select 1 from {{ ref('events_mv') }}
     where id = 2 and payload = 'beta_view_mv'
+)
+
+union all
+
+select 'ordered_events_mv has unexpected row count' as failure
+where (select count(*) from {{ ref('ordered_events_mv') }}) != 2
+
+union all
+
+select 'ordered_events_mv missing first row' as failure
+where not exists (
+    select 1 from {{ ref('ordered_events_mv') }}
+    where id = 1 and payload = 'alpha' and category = 'first'
+)
+
+union all
+
+select 'ordered_events_mv missing second row' as failure
+where not exists (
+    select 1 from {{ ref('ordered_events_mv') }}
+    where id = 2 and payload = 'beta' and category = 'second'
 )
