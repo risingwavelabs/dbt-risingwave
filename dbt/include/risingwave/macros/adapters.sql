@@ -595,7 +595,8 @@
 
   {% for index_change in index_changes %}
     {% if index_change.action == 'create' %}
-      {%- set index_config = adapter.parse_index(index_change.context.as_node_config) -%}
+      {%- set index_dict = index_change.context.as_node_config -%}
+      {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
       {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
       {% do risingwave__wait_for_background_ddl(relation, 'index', index_name) %}
     {% endif %}

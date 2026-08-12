@@ -331,6 +331,61 @@ def test_background_ddl_wait_targets_generated_index_name():
     ) == ['WAIT INDEX "analytics"."__dbt_index_daily orders_id"']
 
 
+def test_background_index_change_wait_parses_only_columns():
+    relation = RisingWaveRelation.create(
+        database="dev",
+        schema="analytics",
+        identifier="daily orders",
+        type="materialized_view",
+    )
+    parsed_configs = []
+    waits = []
+
+    def parse_index(index_config):
+        parsed_configs.append(index_config)
+        if set(index_config) != {"columns"}:
+            raise ValueError("unexpected index config property")
+        return SimpleNamespace(columns=index_config["columns"])
+
+    index_changes = [
+        SimpleNamespace(
+            action="drop",
+            context=SimpleNamespace(as_node_config={"columns": ["old_id"]}),
+        ),
+        SimpleNamespace(
+            action="create",
+            context=SimpleNamespace(
+                as_node_config={
+                    "columns": ["event_type"],
+                    "include": ["user_id"],
+                    "distributed_by": ["event_type"],
+                }
+            ),
+        ),
+    ]
+    macro = SimpleNamespace(
+        name="risingwave__wait_for_background_index_changes",
+        macro_sql=ADAPTER_MACROS.read_text(),
+    )
+    context = {
+        "config": {"background_ddl": True},
+        "return": lambda value: (_ for _ in ()).throw(MacroReturn(value)),
+        "adapter": SimpleNamespace(parse_index=parse_index),
+        "risingwave__background_ddl_enabled": lambda: True,
+        "risingwave__get_index_name": (
+            lambda identifier, columns: f"__dbt_index_{identifier}_{'_'.join(columns)}"
+        ),
+        "risingwave__wait_for_background_ddl": lambda *args: waits.append(args),
+    }
+
+    CallableMacroGenerator(macro, context)(relation, index_changes)
+
+    assert parsed_configs == [{"columns": ["event_type"]}]
+    assert [(args[1], args[2]) for args in waits] == [
+        ("index", "__dbt_index_daily orders_event_type")
+    ]
+
+
 def test_background_ddl_wait_is_skipped_when_disabled():
     relation = RisingWaveRelation.create(
         database="dev",
