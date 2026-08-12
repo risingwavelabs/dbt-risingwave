@@ -61,7 +61,7 @@ Supported adapter-specific profile keys:
 | `streaming_parallelism_for_index` | Sets `SET streaming_parallelism_for_index = ...` for the session. |
 | `enable_index_selection` | Sets `SET enable_index_selection = true/false` for the session. |
 
-`background_ddl` is supported as a model config rather than a profile key because the adapter must issue `WAIT` after background DDL submissions to preserve dbt's dependency semantics.
+`background_ddl` is supported as a model config rather than a profile key because the adapter must issue an object-specific `WAIT` after background DDL submissions to preserve dbt's dependency semantics.
 
 ## Model Configuration
 
@@ -288,12 +288,17 @@ models:
 How it works:
 
 - The adapter sets `background_ddl = true` before running supported DDL.
-- After submitting the DDL, the adapter issues RisingWave `WAIT`.
-- dbt does not continue to downstream models, hooks, or tests until `WAIT` returns.
+- After submitting the DDL, the adapter issues an object-specific RisingWave
+  `WAIT`, such as `WAIT SINK "schema"."sink_name"`. Each configured index is
+  awaited by name.
+- dbt does not continue to downstream models, hooks, or tests until that object's
+  `WAIT` returns.
 
-Caveat:
+Requirements:
 
-- RisingWave `WAIT` waits for all background creating jobs, not only the job started by the current dbt model. If other background DDL is running in the same cluster, the dbt node may wait on that work too.
+- Object-specific `WAIT` requires RisingWave v3.0.0 or newer.
+- The adapter waits only for the objects created by the current dbt node. Other
+  background DDL jobs in the cluster do not block it.
 
 ### Secrets
 

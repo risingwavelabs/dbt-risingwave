@@ -72,9 +72,9 @@ requirements, and RisingWave limitations.
 
 ### Background DDL
 
-`background_ddl=true` lets supported materializations submit background DDL while still preserving dbt semantics by issuing RisingWave `WAIT` before dbt continues.
+`background_ddl=true` lets supported materializations submit background DDL while still preserving dbt semantics by issuing an object-specific RisingWave `WAIT` before dbt continues.
 
-See [docs/configuration.md](docs/configuration.md) for supported materializations, examples, and the cluster-wide `WAIT` caveat.
+See [docs/configuration.md](docs/configuration.md) for supported materializations, examples, and version requirements.
 
 ### Zero-Downtime Rebuilds
 

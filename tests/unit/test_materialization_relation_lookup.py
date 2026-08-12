@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from dbt.adapters.risingwave.relation import RisingWaveRelation
 from dbt_common.clients.jinja import CallableMacroGenerator, MacroReturn
 
 
@@ -278,15 +279,88 @@ def test_sink_zero_downtime_uses_replace_sink_for_from_relation():
     assert 'var("zero_downtime", false)' in sink
     assert "old_relation is not none and not full_refresh_mode and zero_downtime_mode" in sink
     assert "risingwave__replace_sink(target_relation, replace_from_relation)" in sink
-    assert "risingwave__wait_for_replace_sink()" in sink
+    assert "risingwave__wait_for_replace_sink(target_relation)" in sink
     assert "full_refresh_mode=relation_recreated" in sink
     assert "replace sink {{ relation }}" in adapter_macros
-    assert "macro risingwave__wait_for_replace_sink()" in adapter_macros
+    assert "macro risingwave__wait_for_replace_sink(relation)" in adapter_macros
     assert "forces replacement sinks to background creation" in adapter_macros
     assert "replace sink if not exists" not in adapter_macros
     assert "RisingWave REPLACE SINK does not support AS query yet" in adapter_macros
     assert "Raw sink DDL cannot be safely rewritten" in adapter_macros
     assert "['materialized_view', 'view', 'sink']" in validation_macros
+
+
+@pytest.mark.parametrize(
+    ("relation_type", "expected_query"),
+    [
+        ("table", 'WAIT TABLE "analytics"."daily orders"'),
+        ("materialized_view", 'WAIT MATERIALIZED VIEW "analytics"."daily orders"'),
+        ("sink", 'WAIT SINK "analytics"."daily orders"'),
+    ],
+)
+def test_background_ddl_wait_targets_only_the_created_relation(relation_type, expected_query):
+    relation = RisingWaveRelation.create(
+        database="dev",
+        schema="analytics",
+        identifier="daily orders",
+        type=relation_type,
+    )
+
+    assert execute_wait_macro(
+        "risingwave__wait_for_background_ddl",
+        relation,
+        relation_type,
+        background_ddl=True,
+    ) == [expected_query]
+
+
+def test_background_ddl_wait_targets_generated_index_name():
+    relation = RisingWaveRelation.create(
+        database="dev",
+        schema="analytics",
+        identifier="daily orders",
+        type="materialized_view",
+    )
+
+    assert execute_wait_macro(
+        "risingwave__wait_for_background_ddl",
+        relation,
+        "index",
+        "__dbt_index_daily orders_id",
+        background_ddl=True,
+    ) == ['WAIT INDEX "analytics"."__dbt_index_daily orders_id"']
+
+
+def test_background_ddl_wait_is_skipped_when_disabled():
+    relation = RisingWaveRelation.create(
+        database="dev",
+        schema="analytics",
+        identifier="events",
+        type="sink",
+    )
+
+    assert (
+        execute_wait_macro(
+            "risingwave__wait_for_background_ddl",
+            relation,
+            "sink",
+            background_ddl=False,
+        )
+        == []
+    )
+
+
+def test_replace_sink_wait_targets_only_the_replaced_sink():
+    relation = RisingWaveRelation.create(
+        database="dev",
+        schema="analytics",
+        identifier="events sink",
+        type="sink",
+    )
+
+    assert execute_wait_macro("risingwave__wait_for_replace_sink", relation) == [
+        'WAIT SINK "analytics"."events sink"'
+    ]
 
 
 def test_profile_session_settings_are_allowlisted():
@@ -364,3 +438,24 @@ def render_adapter_macro(name, config, *args):
         "return": dbt_return,
     }
     return CallableMacroGenerator(macro, context)(*args)
+
+
+def execute_wait_macro(name, *args, background_ddl=None):
+    queries = []
+
+    def dbt_return(value):
+        raise MacroReturn(value)
+
+    def raise_compiler_error(message):
+        raise ValueError(message)
+
+    macro = SimpleNamespace(name=name, macro_sql=ADAPTER_MACROS.read_text())
+    context = {
+        "config": {"background_ddl": background_ddl},
+        "exceptions": SimpleNamespace(raise_compiler_error=raise_compiler_error),
+        "return": dbt_return,
+        "run_query": queries.append,
+        "risingwave__background_ddl_enabled": lambda: background_ddl,
+    }
+    CallableMacroGenerator(macro, context)(*args)
+    return queries

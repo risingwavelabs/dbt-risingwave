@@ -4,7 +4,8 @@
     connector_parameters={
       'type': 'append-only',
       'force_append_only': 'true'
-    }
+    },
+    background_ddl=true
 ) }}
 
 select

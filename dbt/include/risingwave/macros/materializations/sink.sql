@@ -45,7 +45,7 @@
         {% call statement("main") -%}
             {{ risingwave__replace_sink(target_relation, replace_from_relation) }}
         {%- endcall %}
-        {{ risingwave__wait_for_replace_sink() }}
+        {{ risingwave__wait_for_replace_sink(target_relation) }}
     {% else %} {{ risingwave__execute_no_op(target_relation) }}
     {% endif %}
 

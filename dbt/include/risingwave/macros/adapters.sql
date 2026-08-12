@@ -548,12 +548,31 @@
   {% if not risingwave__background_ddl_enabled() %}
     {{ return("") }}
   {% endif %}
-  {% do run_query('WAIT') %}
+
+  {%- set relation_type = relation_type if relation_type is not none else relation.type -%}
+  {%- set wait_keywords = {
+    'table': 'TABLE',
+    'materialized_view': 'MATERIALIZED VIEW',
+    'sink': 'SINK',
+    'index': 'INDEX'
+  } -%}
+  {%- set wait_keyword = wait_keywords.get(relation_type | lower) -%}
+  {% if wait_keyword is none %}
+    {{ exceptions.raise_compiler_error(
+      "Cannot wait for unsupported background DDL relation type: " ~ relation_type
+    ) }}
+  {% endif %}
+
+  {%- set wait_relation = relation -%}
+  {% if identifier is not none %}
+    {%- set wait_relation = relation.replace_path(identifier=identifier) -%}
+  {% endif %}
+  {% do run_query('WAIT ' ~ wait_keyword ~ ' ' ~ wait_relation.include(database=False)) %}
 {% endmacro %}
 
-{% macro risingwave__wait_for_replace_sink() %}
+{% macro risingwave__wait_for_replace_sink(relation) %}
   {# RisingWave forces replacement sinks to background creation for recovery safety. #}
-  {% do run_query('WAIT') %}
+  {% do run_query('WAIT SINK ' ~ relation.include(database=False)) %}
 {% endmacro %}
 
 {% macro risingwave__wait_for_background_indexes(relation) %}
@@ -562,9 +581,25 @@
   {% endif %}
 
   {%- set index_configs = config.get('indexes', []) -%}
-  {% if index_configs | length > 0 %}
-    {% do run_query('WAIT') %}
+  {% for index_dict in index_configs %}
+    {%- set index_config = adapter.parse_index({"columns": index_dict.get("columns", [])}) -%}
+    {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
+    {% do risingwave__wait_for_background_ddl(relation, 'index', index_name) %}
+  {% endfor %}
+{% endmacro %}
+
+{% macro risingwave__wait_for_background_index_changes(relation, index_changes) %}
+  {% if not risingwave__background_ddl_enabled() %}
+    {{ return("") }}
   {% endif %}
+
+  {% for index_change in index_changes %}
+    {% if index_change.action == 'create' %}
+      {%- set index_config = adapter.parse_index(index_change.context.as_node_config) -%}
+      {%- set index_name = risingwave__get_index_name(relation.identifier, index_config.columns) -%}
+      {% do risingwave__wait_for_background_ddl(relation, 'index', index_name) %}
+    {% endif %}
+  {% endfor %}
 {% endmacro %}
 
 {% macro risingwave__handle_on_configuration_change(old_relation, target_relation) %}
@@ -583,7 +618,7 @@
       {% call statement('main') -%}
         {{ risingwave__update_indexes_on_materialized_view(target_relation, configuration_changes.indexes) }}
       {%- endcall %}
-      {{ risingwave__wait_for_background_ddl(target_relation, 'index') }}
+      {{ risingwave__wait_for_background_index_changes(target_relation, configuration_changes.indexes) }}
     {% elif on_configuration_change == 'continue' %}
         -- do nothing but a warning
         {{ exceptions.warn("Configuration changes were identified and `on_configuration_change` was set to `continue` for {}".format(target_relation)) }}
