@@ -36,6 +36,7 @@ default:
       streaming_parallelism: 2
       streaming_parallelism_for_backfill: 2
       streaming_max_parallelism: 8
+      streaming_cache_refill_policy: both
       enable_serverless_backfill: true
       backfill_rate_limit: 1000
       streaming_parallelism_for_materialized_view: 4
@@ -50,6 +51,7 @@ Supported adapter-specific profile keys:
 | `streaming_parallelism` | Sets `SET streaming_parallelism = ...` for the session. |
 | `streaming_parallelism_for_backfill` | Sets `SET streaming_parallelism_for_backfill = ...` for the session. |
 | `streaming_max_parallelism` | Sets `SET streaming_max_parallelism = ...` for the session. |
+| `streaming_cache_refill_policy` | Sets the initial cache refill policy for streaming jobs created in the session. |
 | `enable_serverless_backfill` | Sets `SET enable_serverless_backfill = true/false` for the session. |
 | `backfill_rate_limit` | Sets `SET backfill_rate_limit = ...` for the session. |
 | `source_rate_limit` | Sets `SET source_rate_limit = ...` for the session. |
@@ -118,6 +120,7 @@ You can override supported RisingWave session settings for an individual model. 
     streaming_parallelism=2,
     streaming_parallelism_for_backfill=2,
     streaming_max_parallelism=8,
+    streaming_cache_refill_policy='both',
     streaming_parallelism_for_materialized_view=4,
     backfill_rate_limit=1000,
     enable_index_selection=true
@@ -134,6 +137,7 @@ Supported model configs:
 | `streaming_parallelism` | Sets the initial streaming parallelism for streaming jobs. |
 | `streaming_parallelism_for_backfill` | Sets streaming parallelism for backfill. |
 | `streaming_max_parallelism` | Sets the maximum future streaming parallelism. |
+| `streaming_cache_refill_policy` | Sets the initial cache refill policy for streaming jobs created by the model. |
 | `streaming_parallelism_for_materialized_view` | Sets materialized-view-specific streaming parallelism. |
 | `streaming_parallelism_for_source` | Sets source-specific streaming parallelism. |
 | `streaming_parallelism_for_table` | Sets table-specific streaming parallelism. |
@@ -146,12 +150,18 @@ Supported model configs:
 | `background_ddl` | Runs supported DDL in the background and waits before dbt continues. |
 | `enable_index_selection` | Enables or disables index selection while planning the model SQL. |
 
+`streaming_cache_refill_policy` accepts `enabled`, `disabled`, `streaming`,
+`serving`, or `both`. It is persisted when RisingWave creates a streaming job;
+changing the dbt config alone does not update an existing job. Rebuild the model,
+for example with `--full-refresh`, when changing the policy for an existing model.
+
 These configs can also be set globally in `dbt_project.yml`:
 
 ```yaml
 models:
   my_project:
     +streaming_parallelism_for_backfill: 2
+    +streaming_cache_refill_policy: both
     +backfill_rate_limit: 1000
     +enable_index_selection: true
 ```

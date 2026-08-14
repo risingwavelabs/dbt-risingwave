@@ -24,6 +24,7 @@ NATIVE_MODEL_SESSION_SETTINGS = {
     "streaming_parallelism",
     "streaming_parallelism_for_backfill",
     "streaming_max_parallelism",
+    "streaming_cache_refill_policy",
     "enable_serverless_backfill",
     "backfill_rate_limit",
     "source_rate_limit",
@@ -425,6 +426,39 @@ def test_profile_session_settings_are_allowlisted():
     assert "background_ddl" not in connections.RISINGWAVE_PROFILE_SESSION_SETTINGS
 
 
+def test_profile_credentials_accept_streaming_cache_refill_policy():
+    connections = load_local_connections_module()
+
+    credentials = connections.RisingWaveCredentials.from_dict(
+        {
+            "host": "127.0.0.1",
+            "user": "root",
+            "password": "",
+            "port": 4566,
+            "dbname": "dev",
+            "schema": "public",
+            "streaming_cache_refill_policy": "both",
+        }
+    )
+
+    assert credentials.streaming_cache_refill_policy == "both"
+
+
+def test_streaming_cache_refill_policy_renders_in_model_sql_header():
+    rendered = render_adapter_macro(
+        "risingwave__render_sql_header",
+        {"streaming_cache_refill_policy": "both"},
+        extra_context={
+            "risingwave__native_model_session_settings": lambda: ["streaming_cache_refill_policy"],
+            "risingwave__render_session_config_value": lambda value: render_adapter_macro(
+                "risingwave__render_session_config_value", {}, value
+            ),
+        },
+    )
+
+    assert rendered == "set streaming_cache_refill_policy = 'both';"
+
+
 def test_profile_session_settings_render_safe_set_statements():
     connections = load_local_connections_module()
 
@@ -448,6 +482,7 @@ def test_profile_session_settings_render_safe_set_statements():
 
     handle = FakeHandle()
     credentials = SimpleNamespace(
+        streaming_cache_refill_policy="both",
         streaming_parallelism_for_materialized_view="bounded(16)",
         streaming_parallelism_for_source="ratio(0.5)",
         backfill_rate_limit=1000,
@@ -460,6 +495,7 @@ def test_profile_session_settings_render_safe_set_statements():
     assert handle.cursor_obj.closed
     assert handle.cursor_obj.statements == [
         "SET RW_IMPLICIT_FLUSH TO true",
+        "SET streaming_cache_refill_policy = 'both'",
         "SET enable_serverless_backfill = true",
         "SET backfill_rate_limit = 1000",
         "SET streaming_parallelism_for_materialized_view = 'bounded(16)'",
@@ -477,7 +513,7 @@ def load_local_connections_module():
     return module
 
 
-def render_adapter_macro(name, config, *args):
+def render_adapter_macro(name, config, *args, extra_context=None):
     def dbt_return(value):
         raise MacroReturn(value)
 
@@ -492,6 +528,7 @@ def render_adapter_macro(name, config, *args):
         ),
         "return": dbt_return,
     }
+    context.update(extra_context or {})
     return CallableMacroGenerator(macro, context)(*args)
 
 

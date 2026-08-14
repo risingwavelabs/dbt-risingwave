@@ -50,7 +50,7 @@ See [docs/configuration.md](docs/configuration.md) for model-level and `dbt_proj
 
 ### RisingWave Native Model Configs
 
-The adapter supports RisingWave session settings such as `streaming_parallelism`, `streaming_parallelism_for_backfill`, `backfill_rate_limit`, and `enable_index_selection` in profiles and native model configs.
+The adapter supports RisingWave session settings such as `streaming_parallelism`, `streaming_parallelism_for_backfill`, `streaming_cache_refill_policy`, `backfill_rate_limit`, and `enable_index_selection` in profiles and native model configs.
 
 See [docs/configuration.md](docs/configuration.md) for the full configuration matrix.
 

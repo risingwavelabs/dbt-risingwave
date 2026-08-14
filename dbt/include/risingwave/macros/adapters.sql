@@ -22,6 +22,7 @@
     "streaming_parallelism",
     "streaming_parallelism_for_backfill",
     "streaming_max_parallelism",
+    "streaming_cache_refill_policy",
     "enable_serverless_backfill",
     "backfill_rate_limit",
     "source_rate_limit",
