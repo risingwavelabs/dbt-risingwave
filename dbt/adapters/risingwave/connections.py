@@ -16,6 +16,7 @@ RISINGWAVE_PROFILE_SESSION_SETTINGS = (
     "streaming_parallelism",
     "streaming_parallelism_for_backfill",
     "streaming_max_parallelism",
+    "streaming_cache_refill_policy",
     "enable_serverless_backfill",
     "backfill_rate_limit",
     "source_rate_limit",
@@ -39,6 +40,7 @@ class RisingWaveCredentials(PostgresCredentials):
     streaming_parallelism: Optional[Any] = None
     streaming_parallelism_for_backfill: Optional[Any] = None
     streaming_max_parallelism: Optional[Any] = None
+    streaming_cache_refill_policy: Optional[str] = None
     enable_serverless_backfill: Optional[bool] = None
     backfill_rate_limit: Optional[int] = None
     source_rate_limit: Optional[int] = None
