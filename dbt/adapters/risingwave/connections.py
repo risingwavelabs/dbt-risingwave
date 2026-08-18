@@ -8,6 +8,8 @@ from dbt.adapters.postgres.connections import (
     PostgresConnectionManager,
     PostgresCredentials,
 )
+from dbt.adapters.postgres.record import PostgresRecordReplayHandle
+from dbt_common.record import RecorderMode, get_record_mode_from_env
 
 logger = AdapterLogger("RisingWave")
 
@@ -71,6 +73,7 @@ class RisingWaveCredentials(PostgresCredentials):
             "sslmode",
             "keepalives_idle",
             "connect_timeout",
+            "autocommit",
             "retries",
         )
 
@@ -119,15 +122,29 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         kwargs.update(extra_kwargs or {})
 
         def connect():
-            handle = psycopg2.connect(
-                dbname=credentials.database,
-                user=credentials.user,
-                host=credentials.host,
-                password=credentials.password,
-                port=credentials.port,
-                connect_timeout=credentials.connect_timeout,
-                **kwargs,
-            )
+            handle = None
+
+            # Keep this in sync with PostgresConnectionManager.open. Replay
+            # mode does not create a real database connection, while record
+            # and diff modes wrap one to observe native connection activity.
+            rec_mode = get_record_mode_from_env()
+            if rec_mode != RecorderMode.REPLAY:
+                handle = psycopg2.connect(
+                    dbname=credentials.database,
+                    user=credentials.user,
+                    host=credentials.host,
+                    password=credentials.password,
+                    port=credentials.port,
+                    connect_timeout=credentials.connect_timeout,
+                    **kwargs,
+                )
+
+            if handle is not None and credentials.autocommit:
+                handle.autocommit = True
+
+            if rec_mode is not None:
+                handle = PostgresRecordReplayHandle(handle, connection)
+
             if credentials.role:
                 handle.cursor().execute("set role {}".format(credentials.role))
             return handle

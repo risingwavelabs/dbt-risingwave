@@ -2,7 +2,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 
 CONNECTIONS = (
@@ -12,6 +12,100 @@ CONNECTIONS = (
     / "risingwave"
     / "connections.py"
 )
+
+
+def test_open_passes_risingwave_options_and_enables_autocommit():
+    connections = load_local_connections_module()
+    credentials = connections.RisingWaveCredentials.from_dict(
+        {
+            "host": "127.0.0.1",
+            "user": "root",
+            "password": "",
+            "port": 4566,
+            "dbname": "dev",
+            "schema": "public",
+            "autocommit": True,
+        }
+    )
+    connection = SimpleNamespace(state="init", credentials=credentials, handle=None)
+    handle = SimpleNamespace(autocommit=False)
+
+    def retry_connection(connection, connect, **kwargs):
+        connection.handle = connect()
+        connection.state = "open"
+        return connection
+
+    with (
+        patch.object(connections, "get_record_mode_from_env", return_value=None),
+        patch.object(connections.psycopg2, "connect", return_value=handle) as connect,
+        patch.object(
+            connections.RisingWaveConnectionManager,
+            "retry_connection",
+            side_effect=retry_connection,
+        ),
+    ):
+        result = connections.RisingWaveConnectionManager._super_open(
+            connection, extra_kwargs={"gssencmode": "disable"}
+        )
+
+    assert result is connection
+    assert handle.autocommit is True
+    assert "autocommit" in credentials._connection_keys()
+    connect.assert_called_once_with(
+        dbname="dev",
+        user="root",
+        host="127.0.0.1",
+        password="",
+        port=4566,
+        connect_timeout=10,
+        application_name="dbt",
+        gssencmode="disable",
+    )
+
+
+def test_open_uses_record_replay_handle_without_real_connection():
+    connections = load_local_connections_module()
+    credentials = connections.RisingWaveCredentials.from_dict(
+        {
+            "host": "127.0.0.1",
+            "user": "root",
+            "password": "",
+            "port": 4566,
+            "dbname": "dev",
+            "schema": "public",
+        }
+    )
+    connection = SimpleNamespace(state="init", credentials=credentials, handle=None)
+    replay_handle = object()
+
+    def retry_connection(connection, connect, **kwargs):
+        connection.handle = connect()
+        connection.state = "open"
+        return connection
+
+    with (
+        patch.object(
+            connections,
+            "get_record_mode_from_env",
+            return_value=connections.RecorderMode.REPLAY,
+        ),
+        patch.object(connections.psycopg2, "connect") as connect,
+        patch.object(
+            connections,
+            "PostgresRecordReplayHandle",
+            return_value=replay_handle,
+        ) as record_replay_handle,
+        patch.object(
+            connections.RisingWaveConnectionManager,
+            "retry_connection",
+            side_effect=retry_connection,
+        ),
+    ):
+        result = connections.RisingWaveConnectionManager._super_open(connection)
+
+    assert result.handle is replay_handle
+    connect.assert_not_called()
+    record_replay_handle.assert_called_once_with(None, connection)
 
 
 def test_cancel_quotes_compound_process_id_with_query_binding():
