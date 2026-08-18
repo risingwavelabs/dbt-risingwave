@@ -1,21 +1,22 @@
-# install latest changes in dbt-core
-git+https://github.com/dbt-labs/dbt-core.git@main#subdirectory=core
-git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
-git+https://github.com/dbt-labs/dbt-postgres.git@main
+# Test against the released dbt versions supported by setup.py. Pinning these
+# keeps local and tox environments from accidentally installing dbt 2.0 work
+# from upstream main branches.
+dbt-core==1.12.2
+dbt-tests-adapter==1.20.0
+dbt-common==1.39.0
+dbt-postgres==1.11.0
 
-black==22.3.0
+black==24.2.0
 bumpversion
 flake8
 flaky
 freezegun==0.3.12
 ipdb
-mypy==0.782
+mypy==1.8.0
 pip-tools
 pre-commit
 pytest
 pytest-dotenv
-pytest-logbook
 pytest-csv
 pytest-xdist
 pytz

@@ -32,12 +32,10 @@ setup(
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
     install_requires=[
-        "dbt-postgres~=1.9.0",
-        "dbt-core~=1.11.0",
-        # not sure if these are needed due to inheritance from dbt-postgres
-        # but doesn't hurt to be explicit I suppose
-        "dbt-common>=1.0.4,<2.0",
-        "dbt-adapters>=1.7.0,<2.0",
+        "dbt-postgres~=1.11.0",
+        "dbt-core~=1.12.0",
+        "dbt-common>=1.37.5,<2.0",
+        "dbt-adapters>=1.24.5,<2.0",
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -45,11 +43,10 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.10",
 )
