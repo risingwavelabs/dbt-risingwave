@@ -76,3 +76,16 @@ where not exists (
     select 1 from {{ ref('sink_source_mv') }}
     where id = 2 and payload = 'beta_mv'
 )
+
+union all
+
+select 'selected_orders_blackhole_sink must sink FROM the selected_orders_mv relation' as failure
+where not exists (
+    select 1
+    from rw_relations
+    join rw_schemas on schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ target.schema }}'
+      and rw_relations.name = 'selected_orders_blackhole_sink'
+      and rw_relations.relation_type = 'sink'
+      and rw_relations.definition ilike '%FROM %selected_orders_mv%'
+)

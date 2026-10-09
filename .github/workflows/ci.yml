@@ -603,6 +603,9 @@ jobs:
       run: python3 -m pip install .
     - name: Wait for RisingWave to be ready
       run: timeout 60 bash -c 'until nc -z 127.0.0.1 4566; do sleep 1; done'
+    - name: prepare-grantee
+      run: dbt run-operation prepare_zero_downtime_grantee
+      working-directory: tests/e2e/zero_downtime
     - name: dbt-run-initial
       run: dbt run --full-refresh
       working-directory: tests/e2e/zero_downtime

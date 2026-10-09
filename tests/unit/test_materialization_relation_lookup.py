@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,7 @@ MATERIALIZATION_DIR = (
     / "materializations"
 )
 ADAPTER_MACROS = MATERIALIZATION_DIR.parent / "adapters.sql"
+INCREMENTAL_STRATEGY_MACROS = MATERIALIZATION_DIR / "incremental_strategies.sql"
 VALIDATION_MACROS = MATERIALIZATION_DIR.parent / "validation.sql"
 CONNECTIONS = MATERIALIZATION_DIR.parents[3] / "adapters" / "risingwave" / "connections.py"
 
@@ -292,6 +294,111 @@ def test_sink_zero_downtime_uses_replace_sink_for_from_relation():
 
 
 @pytest.mark.parametrize(
+    ("sql", "is_query"),
+    [
+        ('"dev"."public"."selected_orders"', False),
+        ('"dev"."preselect"."orders"', False),
+        ("\n  \"dev\".\"public\".\"orders\"\n", False),
+        ("select id from orders", True),
+        ("  SELECT id from orders", True),
+        ("with x as (select 1) select * from x", True),
+        ("-- leading comment\n/* block\ncomment */ select 1", True),
+        ("(select 1)", True),
+        ("values (1)", True),
+    ],
+)
+def test_sink_ddl_detects_query_by_first_keyword(sql, is_query):
+    assert (
+        render_adapter_macro(
+            "risingwave__sql_is_query",
+            {},
+            sql,
+            extra_context={"modules": SimpleNamespace(re=re)},
+        )
+        is is_query
+    )
+
+
+def test_sink_ddl_uses_query_detection_instead_of_substring_match():
+    adapter_macros = ADAPTER_MACROS.read_text()
+
+    assert "{% if risingwave__sql_is_query(sql) -%}" in adapter_macros
+    assert '"select" in sql.lower()' not in adapter_macros
+
+
+def render_delete_insert(unique_key, incremental_predicates=None):
+    return render_adapter_macro(
+        "risingwave__get_delete_insert_merge_sql",
+        {},
+        '"dev"."public"."target"',
+        '"target__dbt_tmp"',
+        unique_key,
+        [SimpleNamespace(name="id"), SimpleNamespace(name="batch_id")],
+        incremental_predicates,
+        extra_context={
+            "get_quoted_csv": lambda names: ", ".join(f'"{name}"' for name in names)
+        },
+        macro_file=INCREMENTAL_STRATEGY_MACROS,
+    )
+
+
+def normalize_sql(sql):
+    return " ".join(sql.split())
+
+
+def test_delete_insert_does_not_alias_delete_target():
+    rendered = normalize_sql(render_delete_insert("id", ["batch_id > 0"]))
+
+    assert "DBT_INTERNAL" not in rendered
+    assert (
+        'delete from "dev"."public"."target" where id in '
+        '( select distinct id from "target__dbt_tmp" ) and batch_id > 0 ;'
+    ) in rendered
+    assert (
+        'insert into "dev"."public"."target" ("id", "batch_id") '
+        '( select "id", "batch_id" from "target__dbt_tmp" )'
+    ) in rendered
+
+
+def test_delete_insert_compares_composite_keys_as_rows():
+    rendered = normalize_sql(render_delete_insert(["id", "batch_id"]))
+
+    assert (
+        'where row(id, batch_id) in '
+        '( select distinct row(id, batch_id) from "target__dbt_tmp" );'
+    ) in rendered
+
+
+def test_incremental_strategies_exclude_merge():
+    from dbt.adapters.risingwave.impl import RisingWaveAdapter
+
+    strategies = RisingWaveAdapter.valid_incremental_strategies(None)
+
+    assert strategies == ["append", "delete+insert", "microbatch"]
+
+
+def test_incremental_strategy_is_resolved_before_building_temp_relation():
+    incremental = (MATERIALIZATION_DIR / "incremental.sql").read_text()
+
+    assert incremental.index("adapter.get_incremental_strategy_macro") < incremental.index(
+        "risingwave__create_table_as(False, temp_relation, sql)"
+    )
+
+
+def test_zero_downtime_grants_are_applied_before_swap():
+    materialized_view = (MATERIALIZATION_DIR / "materialized_view.sql").read_text()
+    view = (MATERIALIZATION_DIR / "view.sql").read_text()
+
+    assert materialized_view.index("apply_grants(temp_relation") < materialized_view.index(
+        "risingwave__swap_materialized_views(old_relation, temp_relation)"
+    )
+    assert "apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}\n    {% else %}" not in materialized_view
+    assert view.index("apply_grants(temp_relation") < view.index(
+        "risingwave__swap_views(old_relation, temp_relation)"
+    )
+
+
+@pytest.mark.parametrize(
     ("relation_type", "expected_query"),
     [
         ("table", 'WAIT TABLE "analytics"."daily orders"'),
@@ -513,14 +620,14 @@ def load_local_connections_module():
     return module
 
 
-def render_adapter_macro(name, config, *args, extra_context=None):
+def render_adapter_macro(name, config, *args, extra_context=None, macro_file=ADAPTER_MACROS):
     def dbt_return(value):
         raise MacroReturn(value)
 
     def raise_compiler_error(message):
         raise ValueError(message)
 
-    macro = SimpleNamespace(name=name, macro_sql=ADAPTER_MACROS.read_text())
+    macro = SimpleNamespace(name=name, macro_sql=macro_file.read_text())
     context = {
         "config": config,
         "exceptions": SimpleNamespace(

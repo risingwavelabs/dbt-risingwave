@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 import psycopg2
 from dbt.adapters.contracts.connection import Connection
@@ -30,6 +30,48 @@ RISINGWAVE_PROFILE_SESSION_SETTINGS = (
     "streaming_parallelism_for_index",
     "enable_index_selection",
 )
+
+SESSION_PROCESS_ID_ATTR = "_risingwave_session_process_id"
+
+
+class _ProcessListEntry(NamedTuple):
+    process_id: str
+    worker_id: Optional[str]
+    session_pid: Optional[int]
+    info: str
+
+
+def _parse_processlist(description, rows) -> List[_ProcessListEntry]:
+    """Parse `SHOW PROCESSLIST` rows by column name.
+
+    RisingWave returns `Worker Id, Id, User, Host, Database, Time, Info`, where
+    `Id` is the `<worker id>:<process id>` string accepted by `KILL`.
+    """
+    names = [str(column[0]).lower() for column in (description or [])]
+    id_index = names.index("id") if "id" in names else 0
+    info_index = names.index("info") if "info" in names else -1
+
+    entries = []
+    for row in rows:
+        process_id = row[id_index]
+        if process_id is None or str(process_id) == "":
+            # Placeholder rows report frontends whose process list is unavailable.
+            continue
+        process_id = str(process_id)
+        worker_id, _, session_pid = process_id.rpartition(":")
+        try:
+            parsed_session_pid: Optional[int] = int(session_pid)
+        except ValueError:
+            parsed_session_pid = None
+        entries.append(
+            _ProcessListEntry(
+                process_id=process_id,
+                worker_id=worker_id or None,
+                session_pid=parsed_session_pid,
+                info=str(row[info_index] or ""),
+            )
+        )
+    return entries
 
 
 @dataclass
@@ -182,6 +224,7 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
         )
         credentials = cls.get_credentials(connection.credentials)
         cls._configure_session(connection.handle, credentials)
+        cls._remember_session_process_id(connection)
         return connection
 
     @staticmethod
@@ -213,54 +256,82 @@ class RisingWaveConnectionManager(PostgresConnectionManager):
             return value_str
         return "'" + value_str.replace("'", "''") + "'"
 
-    def cancel(self, connection: Connection):
-        # index here references the column order in processlist output:
-        # (id, user, host, database, time, info)
-        INFO_COL_INDEX, PID_COL_INDEX, pid = -1, 0, None
+    @staticmethod
+    def _remember_session_process_id(connection) -> None:
+        """Record the `SHOW PROCESSLIST` id of the session behind this connection.
 
-        if not (connection_name := connection.name):
-            logger.debug("No connection name found")
-            return
+        RisingWave identifies a session as `<worker id>:<process id>`, and process
+        ids are only unique within one frontend. Resolving the full id while the
+        session is idle lets `cancel()` kill exactly this session later, even in
+        multi-frontend clusters.
+        """
+        handle = connection.handle
+        session = None
+        if isinstance(handle, psycopg2.extensions.connection):
+            try:
+                backend_pid = handle.get_backend_pid()
+                cursor = handle.cursor()
+                try:
+                    cursor.execute("SHOW PROCESSLIST")
+                    entries = _parse_processlist(cursor.description, cursor.fetchall())
+                finally:
+                    cursor.close()
+                own_entries = [
+                    entry
+                    for entry in entries
+                    if entry.session_pid == backend_pid
+                    and entry.info.lstrip().upper().startswith("SHOW PROCESSLIST")
+                ]
+                if len(own_entries) == 1:
+                    session = (backend_pid, own_entries[0].process_id)
+            except Exception as exc:
+                logger.debug(f"Unable to resolve RisingWave process id: {exc}")
+        setattr(connection, SESSION_PROCESS_ID_ATTR, session)
 
-        if not (creds := connection.credentials):
-            logger.debug("No credentials found")
-            return
+    def _session_process_id_for_cancel(self, connection: Connection) -> Optional[str]:
+        try:
+            backend_pid = connection.handle.get_backend_pid()
+        except Exception as exc:
+            logger.debug(f"Unable to read backend pid for '{connection.name}': {exc}")
+            return None
 
-        db, schema, table = (
-            creds.database,
-            creds.schema,
-            connection_name.split(".")[-1],
-        )
-        model_pattern = f'"{db}"."{schema}"."{table}"'
+        session = getattr(connection, SESSION_PROCESS_ID_ATTR, None)
+        if session is not None and session[0] == backend_pid:
+            return session[1]
 
+        # Fallback when the id was not resolved at open time. A bare process id is
+        # only unambiguous when the cluster has a single frontend.
+        entries = self._read_processlist()
+        if entries is None or len({entry.worker_id for entry in entries}) > 1:
+            return None
+        matches = [entry for entry in entries if entry.session_pid == backend_pid]
+        return matches[0].process_id if len(matches) == 1 else None
+
+    def _read_processlist(self) -> Optional[List[_ProcessListEntry]]:
         try:
             _, cursor = self.add_query("SHOW PROCESSLIST")
-            if not (processlist := cursor.fetchall()):
-                logger.debug("No process list found")
-                return
-            pid = next(
-                filter(
-                    lambda p: model_pattern in str(p[INFO_COL_INDEX]),
-                    processlist,
-                )
-            )[PID_COL_INDEX]
-
-        except StopIteration:
-            logger.debug(
-                f"no model pattern ({model_pattern}) found in processlist for name: '{connection_name}'"
-            )
-            return
-        except psycopg2.InterfaceError as exc:
-            if "already closed" in str(exc) or "Session not found" in str(exc):
-                logger.debug(f"Connection '{connection_name}' already closed")
-                return
-
-        logger.debug(f"Cancelling query '{connection_name}' ({pid})")
-        try:
-            self.add_query("KILL %s", bindings=(pid,))
+            return _parse_processlist(cursor.description, cursor.fetchall())
         except Exception as exc:
-            logger.debug(f"Error while cancelling query: {exc}")
-            raise
+            logger.debug(f"Unable to read RisingWave process list: {exc}")
+            return None
+
+    def cancel(self, connection: Connection):
+        connection_name = connection.name
+        process_id = self._session_process_id_for_cancel(connection)
+        if process_id is None:
+            logger.debug(f"No RisingWave session found to cancel for '{connection_name}'")
+            return
+
+        logger.debug(f"Cancelling query '{connection_name}' ({process_id})")
+        try:
+            self.add_query("KILL %s", bindings=(process_id,))
+        except Exception as exc:
+            # Cancellation is best effort: dbt is already stopping because of an
+            # earlier failure or interrupt, so a failed KILL must not replace that
+            # outcome with a fatal error.
+            logger.warning(
+                f"Failed to cancel RisingWave query for '{connection_name}' ({process_id}): {exc}"
+            )
 
     # Disable transactions.
     def add_begin_query(self, *args, **kwargs):

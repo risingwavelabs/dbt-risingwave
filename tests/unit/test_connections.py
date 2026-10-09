@@ -108,35 +108,130 @@ def test_open_uses_record_replay_handle_without_real_connection():
     record_replay_handle.assert_called_once_with(None, connection)
 
 
-def test_cancel_quotes_compound_process_id_with_query_binding():
-    connections = load_local_connections_module()
+PROCESSLIST_DESCRIPTION = [
+    (name,) for name in ("Worker Id", "Id", "User", "Host", "Database", "Time", "Info")
+]
+
+
+class FakeProcessListCursor:
+    def __init__(self, rows):
+        self.description = PROCESSLIST_DESCRIPTION
+        self.rows = rows
+        self.executed = []
+
+    def execute(self, sql):
+        self.executed.append(sql)
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        pass
+
+
+def processlist_row(process_id, info):
+    worker_id = process_id.split(":")[0]
+    return (worker_id, process_id, "root", "127.0.0.1:5000", "dev", "10ms", info)
+
+
+def make_cancel_manager(connections, *add_query_results):
     manager = connections.RisingWaveConnectionManager.__new__(
         connections.RisingWaveConnectionManager
     )
-    process_cursor = SimpleNamespace(
-        fetchall=lambda: [
-            (
-                "2:1806",
-                "root",
-                "127.0.0.1",
-                "dev",
-                "1 second",
-                'CREATE MATERIALIZED VIEW "dev"."public"."my_model" AS SELECT 1',
-            )
-        ]
-    )
-    manager.add_query = Mock(side_effect=[(None, process_cursor), (None, None)])
+    manager.add_query = Mock(side_effect=list(add_query_results))
+    return manager
+
+
+def make_connection(backend_pid, remembered_session=None):
     connection = SimpleNamespace(
         name="model.project.my_model",
-        credentials=SimpleNamespace(database="dev", schema="public"),
+        handle=SimpleNamespace(get_backend_pid=lambda: backend_pid),
     )
+    if remembered_session is not None:
+        setattr(connection, "_risingwave_session_process_id", remembered_session)
+    return connection
 
-    manager.cancel(connection)
 
+def test_open_remembers_full_process_id_of_own_session():
+    connections = load_local_connections_module()
+
+    class FakeHandle:
+        def __init__(self, cursor):
+            self._cursor = cursor
+
+        def get_backend_pid(self):
+            return 79
+
+        def cursor(self):
+            return self._cursor
+
+    cursor = FakeProcessListCursor(
+        [
+            # Another frontend can reuse the same process id.
+            processlist_row("3:79", 'CREATE MATERIALIZED VIEW "dev"."public"."other" AS SELECT 1'),
+            processlist_row("3:80", "SHOW PROCESSLIST"),
+            processlist_row("2:79", "SHOW PROCESSLIST"),
+        ]
+    )
+    connection = SimpleNamespace(handle=FakeHandle(cursor))
+
+    with patch.object(connections.psycopg2.extensions, "connection", FakeHandle):
+        connections.RisingWaveConnectionManager._remember_session_process_id(connection)
+
+    assert cursor.executed == ["SHOW PROCESSLIST"]
+    assert connection._risingwave_session_process_id == (79, "2:79")
+
+
+def test_cancel_kills_remembered_session_with_query_binding():
+    connections = load_local_connections_module()
+    manager = make_cancel_manager(connections, (None, None))
+
+    manager.cancel(make_connection(79, remembered_session=(79, "3:79")))
+
+    assert manager.add_query.call_args_list == [call("KILL %s", bindings=("3:79",))]
+
+
+def test_cancel_falls_back_to_process_id_column_on_single_frontend():
+    connections = load_local_connections_module()
+    processlist = FakeProcessListCursor(
+        [
+            processlist_row("2:1806", 'CREATE MATERIALIZED VIEW "dev"."custom"."alias" AS SELECT 1'),
+            processlist_row("2:1807", "SHOW PROCESSLIST"),
+        ]
+    )
+    manager = make_cancel_manager(connections, (None, processlist), (None, None))
+
+    manager.cancel(make_connection(1806))
+
+    # The first column is the worker id; KILL needs the `<worker>:<process>` id.
     assert manager.add_query.call_args_list == [
         call("SHOW PROCESSLIST"),
         call("KILL %s", bindings=("2:1806",)),
     ]
+
+
+def test_cancel_skips_process_id_that_is_ambiguous_across_frontends():
+    connections = load_local_connections_module()
+    processlist = FakeProcessListCursor(
+        [
+            processlist_row("2:1806", "SELECT 1"),
+            processlist_row("3:1806", "SELECT 2"),
+        ]
+    )
+    manager = make_cancel_manager(connections, (None, processlist))
+
+    manager.cancel(make_connection(1806))
+
+    assert manager.add_query.call_args_list == [call("SHOW PROCESSLIST")]
+
+
+def test_cancel_does_not_raise_when_kill_fails():
+    connections = load_local_connections_module()
+    manager = make_cancel_manager(connections, RuntimeError("Session not found"))
+
+    manager.cancel(make_connection(79, remembered_session=(79, "2:79")))
+
+    assert manager.add_query.call_args_list == [call("KILL %s", bindings=("2:79",))]
 
 
 def load_local_connections_module():

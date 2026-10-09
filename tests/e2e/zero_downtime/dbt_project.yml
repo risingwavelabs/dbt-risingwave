@@ -5,4 +5,5 @@ config-version: 2
 profile: dbt_risingwave_zero_downtime
 
 model-paths: ["models"]
+macro-paths: ["macros"]
 test-paths: ["tests"]

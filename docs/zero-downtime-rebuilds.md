@@ -29,10 +29,13 @@ When a model already exists and zero downtime is enabled, the adapter:
 1. Creates a temporary object with the new definition.
 2. For an indexed materialized view, builds the configured indexes on the temporary
    object and waits for their backfill to finish.
-3. Swaps the temporary object with the original object.
-4. Promotes the prebuilt indexes to their canonical dbt names. If a previous index
+3. Applies the model's `grants` to the temporary object. Privileges belong to the
+   object, so they move with it through the swap and readers never see an ungranted
+   relation under the canonical name.
+4. Swaps the temporary object with the original object.
+5. Promotes the prebuilt indexes to their canonical dbt names. If a previous index
    already owns a canonical name, it is renamed and remains attached to the old object.
-5. Either preserves or safely drops the old object, depending on `immediate_cleanup`
+6. Either preserves or safely drops the old object, depending on `immediate_cleanup`
    and remaining dependencies.
 
 Temporary objects use the naming pattern `{original_name}_dbt_zero_down_tmp_{timestamp}`.

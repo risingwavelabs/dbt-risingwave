@@ -75,15 +75,20 @@
       {{ create_indexes(temp_relation) }}
       {{ risingwave__wait_for_background_indexes(temp_relation) }}
 
-      {# Step 3: Swap the materialized views #}
+      {# Step 3: Grant on the new MV before cut-over. Privileges belong to the object,
+         so they move with it through the swap and readers never see an ungranted MV. #}
+      {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=true) %}
+      {% do apply_grants(temp_relation, grant_config, should_revoke=should_revoke) %}
+
+      {# Step 4: Swap the materialized views #}
       {% call statement('swap') -%}
         {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
       {%- endcall %}
 
-      {# Step 4: Free canonical names on old indexes and promote the prebuilt indexes #}
+      {# Step 5: Free canonical names on old indexes and promote the prebuilt indexes #}
       {{ risingwave__handoff_zero_downtime_indexes(temp_relation, target_relation) }}
 
-      {# Step 5: Conditionally drop the old materialized view (now with temp name) #}
+      {# Step 6: Conditionally drop the old materialized view (now with temp name) #}
       {% if immediate_cleanup %}
         {{- log("Attempting immediate cleanup of temporary materialized view: " ~ temp_relation) -}}
         {{ risingwave__drop_zero_downtime_temp_relation(temp_relation) }}
@@ -91,10 +96,6 @@
         {{- log("Preserving temporary materialized view for downstream dependencies: " ~ temp_relation) -}}
         {{- log("Manual cleanup required: DROP MATERIALIZED VIEW IF EXISTS " ~ temp_relation ~ ";") -}}
       {% endif %}
-
-      {# TODO: Should this be before the swap to ensure actual zero downtime #}
-      {% set should_revoke = should_revoke(existing_relation=old_relation, full_refresh_mode=true) %}
-      {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
     {% else %}
       {# Zero downtime disabled - either model config or user flag is missing #}
       {% if model_has_zero_downtime and not user_requested_zero_downtime %}

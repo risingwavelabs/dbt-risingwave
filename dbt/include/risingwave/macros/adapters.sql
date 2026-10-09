@@ -399,6 +399,14 @@
 {%- endmacro %}
 
 
+{% macro risingwave__sql_is_query(sql) -%}
+  {#- Decide between `CREATE SINK ... AS <query>` and `CREATE SINK ... FROM <relation>`
+      from the first keyword, so relation names that merely contain "select"
+      (for example `selected_orders`) still render as FROM. -#}
+  {%- set body = modules.re.sub("^(?:\\s+|--[^\\n]*|/\\*.*?\\*/)*", "", sql | default("", true), flags=modules.re.S) -%}
+  {{ return(modules.re.match("(?i)(?:select|with|values)\\b|\\(", body) is not none) }}
+{%- endmacro %}
+
 {% macro risingwave__sink_ddl(relation, sql, replace_existing=false, from_relation=none) -%}
     {{ risingwave__render_sql_header() }}
 
@@ -414,7 +422,7 @@
         from {{ from_relation }}
     {%- else -%}
     create sink if not exists {{ relation }}
-      {% if "select" in sql.lower() -%}
+      {% if risingwave__sql_is_query(sql) -%}
         as {{ sql }}
       {%- else -%}
         from {{ sql }}
