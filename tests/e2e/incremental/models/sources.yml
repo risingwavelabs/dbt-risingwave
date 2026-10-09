@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: incremental_e2e
+    schema: "{{ target.schema }}"
+    tables:
+      - name: microbatch_input
+        config:
+          event_time: event_ts

@@ -56,12 +56,15 @@
         {{ risingwave__create_view_with_temp_name(temp_relation, sql) }}
       {%- endcall %}
 
-      {# Step 2: Swap the views #}
+      {# Step 2: Grant on the new view before cut-over; privileges move with it through the swap #}
+      {% do apply_grants(temp_relation, grant_config, should_revoke=false) %}
+
+      {# Step 3: Swap the views #}
       {% call statement('swap') -%}
         {{ risingwave__swap_views(old_relation, temp_relation) }}
       {%- endcall %}
 
-      {# Step 3: Conditionally drop the old view (now with temp name) #}
+      {# Step 4: Conditionally drop the old view (now with temp name) #}
       {% if immediate_cleanup %}
         {{- log("Attempting immediate cleanup of temporary view: " ~ temp_relation) -}}
         {{ risingwave__drop_zero_downtime_temp_relation(temp_relation) }}

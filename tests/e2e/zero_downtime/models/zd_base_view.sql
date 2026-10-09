@@ -6,6 +6,7 @@
 
 {{ config(
     materialized='view',
+    grants={'select': ['dbt_e2e_zd_grantee']},
     zero_downtime={
       'enabled': true,
       'immediate_cleanup': true

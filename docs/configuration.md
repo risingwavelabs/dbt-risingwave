@@ -450,6 +450,23 @@ Limitations:
 - Existing downstream materialized views and sinks continue running, but their output schemas do not automatically include newly added columns. Update downstream dbt models separately when they should consume the new column.
 - RisingWave does not support this path for webhook tables.
 
+### Incremental Strategies
+
+`incremental` supports these strategies:
+
+| Strategy | Behavior |
+| --- | --- |
+| `append` | Default without `unique_key`. Inserts the new rows. |
+| `delete+insert` | Default with `unique_key`. Deletes target rows whose key appears in the new rows, then inserts the new rows. Composite keys are compared as row values. |
+| `microbatch` | Deletes the target rows inside the batch's `event_time` window, then inserts the batch. Configure `event_time`, `batch_size`, and `begin` as usual for dbt microbatch models; `unique_key` is not required. |
+
+RisingWave has no `MERGE` statement, so `incremental_strategy='merge'` is rejected
+before the adapter builds anything.
+
+RisingWave `DELETE` does not accept a target alias. Write `incremental_predicates`
+against unqualified target columns, for example `["event_date >= current_date - 7"]`,
+rather than `DBT_INTERNAL_DEST.event_date`.
+
 ### Zero-Downtime Rebuilds
 
 `materialized_view` and `view` support swap-based zero-downtime rebuilds. Adapter-managed

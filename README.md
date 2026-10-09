@@ -174,7 +174,7 @@ from {{ ref('events') }}
 | `ephemeral` | Uses common table expressions under the hood. |
 | `table` | Creates a table from the model query. |
 | `view` | Creates a view from the model query. |
-| `incremental` | Batch-style incremental updates for tables. Prefer `materialized_view` when a streaming MV fits the workload. |
+| `incremental` | Batch-style incremental updates for tables with `append`, `delete+insert`, or `microbatch`. Prefer `materialized_view` when a streaming MV fits the workload. |
 | `connection` | Runs a full `CREATE CONNECTION` statement supplied by the model SQL. |
 | `secret` | Runs a full `CREATE SECRET` statement supplied by the model SQL. |
 | `source` | Runs a full `CREATE SOURCE` statement supplied by the model SQL. |
