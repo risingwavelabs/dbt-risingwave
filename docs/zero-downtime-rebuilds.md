@@ -46,6 +46,14 @@ and performs metadata-only index renames after the materialized-view swap. Queri
 always have a ready index attached to the active materialized view; only the index
 name handoff is non-atomic.
 
+RisingWave cannot swap a view with a materialized view. When a model switches between
+`view` and `materialized_view`, step 4 instead renames the original object to
+`{temporary_name}_old` and then renames the temporary object to the canonical name.
+The canonical name is missing only between those two statements. Objects that depend on
+the original object stay attached to it under its new name, as they do after a swap, and
+cleanup treats it like any other temporary object. If the existing relation is neither a
+view nor a materialized view, for example a table, the run fails before anything is built.
+
 For a supported sink, the adapter instead issues `REPLACE SINK` directly. RisingWave
 creates a replacement sink job, drains the old sink at the cut-over barrier, and exposes
 the replacement under the original name. No temporary dbt relation is created.

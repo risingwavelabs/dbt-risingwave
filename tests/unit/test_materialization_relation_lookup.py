@@ -216,7 +216,7 @@ def test_zero_downtime_immediate_cleanup_is_dependency_safe():
     adapter_macros = ADAPTER_MACROS.read_text()
 
     for materialization in (materialized_view, view):
-        assert "risingwave__drop_zero_downtime_temp_relation(temp_relation)" in materialization
+        assert "risingwave__drop_zero_downtime_temp_relation(retired_relation)" in materialization
         assert "risingwave__drop_relation(temp_relation)" not in materialization
 
     assert "rw_catalog.rw_depend" in adapter_macros
@@ -253,9 +253,9 @@ def test_zero_downtime_materialized_view_prebuilds_and_promotes_indexes():
 
     create_temp = "risingwave__create_materialized_view_with_temp_name(temp_relation, sql)"
     build_indexes = "create_indexes(temp_relation)"
-    swap = "risingwave__swap_materialized_views(old_relation, temp_relation)"
+    swap = "risingwave__zero_downtime_cut_over(old_relation, temp_relation, target_relation)"
     handoff = "risingwave__handoff_zero_downtime_indexes(temp_relation, target_relation)"
-    cleanup = "risingwave__drop_zero_downtime_temp_relation(temp_relation)"
+    cleanup = "risingwave__drop_zero_downtime_temp_relation(retired_relation)"
 
     assert materialized_view.index(create_temp) < materialized_view.index(build_indexes)
     assert materialized_view.index(build_indexes) < materialized_view.index(swap)
@@ -390,11 +390,11 @@ def test_zero_downtime_grants_are_applied_before_swap():
     view = (MATERIALIZATION_DIR / "view.sql").read_text()
 
     assert materialized_view.index("apply_grants(temp_relation") < materialized_view.index(
-        "risingwave__swap_materialized_views(old_relation, temp_relation)"
+        "risingwave__zero_downtime_cut_over(old_relation, temp_relation, target_relation)"
     )
     assert "apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}\n    {% else %}" not in materialized_view
     assert view.index("apply_grants(temp_relation") < view.index(
-        "risingwave__swap_views(old_relation, temp_relation)"
+        "risingwave__zero_downtime_cut_over(old_relation, temp_relation, target_relation)"
     )
 
 

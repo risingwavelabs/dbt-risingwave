@@ -1,6 +1,6 @@
 {# Grants are applied to the new relation before the swap, so they must be present on
    the canonical name after every stage. #}
-{% for model_name in ['zd_events_mv', 'zd_base_view'] %}
+{% for model_name in ['zd_events_mv', 'zd_base_view', 'zd_switch_view_to_mv', 'zd_switch_mv_to_view'] %}
 {% if not loop.first %}
 union all
 {% endif %}
