@@ -21,6 +21,12 @@
     {{ adapter.drop_relation(old_relation) }}
   {% endif %}
 
+  {#- The model switched from another materialization: replace the old relation.
+      Zero-downtime rebuilds keep their own swap-based path. -#}
+  {% if not full_refresh_mode and not zero_downtime_mode %}
+    {% set old_relation = risingwave__replace_relation_of_other_type(old_relation, target_relation) %}
+  {% endif %}
+
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 

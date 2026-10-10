@@ -194,6 +194,7 @@ See [docs/configuration.md](docs/configuration.md) for adapter-specific configur
 ## dbt Run Behavior
 
 - `dbt run`: creates models that do not already exist.
+- `dbt run` after a model switches between `view`, `materialized_view`, and `table`: drops the old relation without `CASCADE` and creates it with the new materialization. If other objects depend on the old relation, the model fails and lists them instead of dropping them. An existing table with a connector, source, or sink is never replaced this way. Zero-downtime rebuilds are unaffected.
 - `dbt run --full-refresh`: drops and recreates models so the deployed objects match the current dbt definitions.
 
 ## Graph Operators

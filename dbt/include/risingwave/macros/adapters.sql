@@ -326,6 +326,132 @@
   {%- endcall %}
 {% endmacro %}
 
+{%- macro risingwave__list_relation_dependents(relation) -%}
+  {%- set relation_schema = relation.schema | replace("'", "''") -%}
+  {%- set relation_identifier = relation.identifier | replace("'", "''") -%}
+  {#- `rw_relations.relation_type` spells materialized views with a space. -#}
+  {%- set relation_type = 'materialized view'
+      if relation.type in ['materialized_view', 'materializedview']
+      else relation.type | replace("'", "''") -%}
+
+  {% call statement('list_relation_dependents', fetch_result=True) -%}
+    select distinct
+      coalesce(dependent_relation.relation_type, 'object') as dependent_type,
+      coalesce(
+        dependent_schema.name || '.' || dependent_relation.name,
+        'id ' || rw_depend.objid::varchar
+      ) as dependent_name
+    from rw_catalog.rw_depend
+    join rw_catalog.rw_relations referenced_relation
+      on rw_depend.refobjid = referenced_relation.id
+    join rw_catalog.rw_schemas referenced_schema
+      on referenced_relation.schema_id = referenced_schema.id
+    left join rw_catalog.rw_relations dependent_relation
+      on rw_depend.objid = dependent_relation.id
+    left join rw_catalog.rw_schemas dependent_schema
+      on dependent_relation.schema_id = dependent_schema.id
+    where referenced_schema.name = '{{ relation_schema }}'
+      and referenced_relation.name = '{{ relation_identifier }}'
+      and referenced_relation.relation_type = '{{ relation_type }}'
+      -- Indexes are owned by their parent relation and are dropped with it.
+      and (
+        dependent_relation.relation_type is null
+        or dependent_relation.relation_type != 'index'
+      )
+    order by dependent_name
+  {%- endcall %}
+
+  {%- set result_table = load_result('list_relation_dependents').table -%}
+  {%- set dependents = [] -%}
+  {%- if result_table is not none -%}
+    {%- for row in result_table.rows -%}
+      {%- do dependents.append(row[0] ~ ' ' ~ row[1]) -%}
+    {%- endfor -%}
+  {%- endif -%}
+  {{ return(dependents) }}
+{%- endmacro %}
+
+{%- macro risingwave__table_has_connector(relation) -%}
+  {%- set relation_schema = relation.schema | replace("'", "''") -%}
+  {%- set relation_identifier = relation.identifier | replace("'", "''") -%}
+
+  {% call statement('table_has_connector', fetch_result=True) -%}
+    select exists (
+      select 1
+      from rw_catalog.rw_sources
+      join rw_catalog.rw_tables
+        on rw_sources.associated_table_id = rw_tables.id
+      join rw_catalog.rw_schemas
+        on rw_tables.schema_id = rw_schemas.id
+      where rw_schemas.name = '{{ relation_schema }}'
+        and rw_tables.name = '{{ relation_identifier }}'
+    ) as has_connector
+  {%- endcall %}
+
+  {%- set result_table = load_result('table_has_connector').table -%}
+  {%- if result_table is none or result_table.rows | length == 0 -%}
+    {{ return(false) }}
+  {%- endif -%}
+  {{ return(result_table.rows[0][0]) }}
+{%- endmacro %}
+
+{#-
+  Called by the view, materialized view, and table materializations when the
+  run is neither a full refresh nor a zero-downtime rebuild. If a relation with
+  the model's name exists with a different type, the model's materialization
+  changed: drop the old relation without CASCADE so the caller creates the new
+  one. Objects that hold ingested data or external state (tables with a
+  connector, sources, sinks, ...) and relations with dependents are never
+  dropped implicitly. Returns the relation the caller should treat as existing,
+  or none once the old relation has been dropped.
+-#}
+{%- macro risingwave__replace_relation_of_other_type(old_relation, target_relation) -%}
+  {%- if old_relation is none -%}
+    {{ return(none) }}
+  {%- endif -%}
+
+  {#- Relations created by older adapter versions report `materializedview`. -#}
+  {%- set old_type = 'materialized_view' if old_relation.type == 'materializedview' else old_relation.type -%}
+  {%- set target_type = 'materialized_view' if target_relation.type == 'materializedview' else target_relation.type -%}
+  {%- if old_type == target_type -%}
+    {{ return(old_relation) }}
+  {%- endif -%}
+
+  {%- set old_description = old_type | replace('_', ' ') -%}
+  {%- set target_description = target_type | replace('_', ' ') -%}
+
+  {%- set holds_state = old_type not in ['view', 'materialized_view', 'table'] -%}
+  {%- if old_type == 'table' and risingwave__table_has_connector(old_relation) -%}
+    {%- set holds_state = true -%}
+    {%- set old_description = 'table with a connector' -%}
+  {%- endif -%}
+  {%- if holds_state -%}
+    {{ exceptions.raise_compiler_error(
+      "Cannot materialize " ~ target_relation ~ " as a " ~ target_description
+      ~ ": it already exists as a " ~ old_description
+      ~ ", which dbt-risingwave does not replace automatically because it holds ingested data or external state."
+      ~ " Drop it manually, or rerun with --full-refresh to drop it and its dependents with CASCADE."
+    ) }}
+  {%- endif -%}
+
+  {%- set dependents = risingwave__list_relation_dependents(old_relation) -%}
+  {%- if dependents | length > 0 -%}
+    {{ exceptions.raise_compiler_error(
+      "Cannot change " ~ target_relation ~ " from a " ~ old_description ~ " to a " ~ target_description
+      ~ " because other objects depend on it: " ~ dependents | join(', ')
+      ~ ". dbt-risingwave does not drop dependents implicitly. Drop or rebuild them first,"
+      ~ " or rerun with --full-refresh to drop them with CASCADE."
+    ) }}
+  {%- endif -%}
+
+  {{ log("Replacing " ~ old_description ~ " " ~ old_relation ~ " with a " ~ target_description ~ " because the model's materialization changed.", info=True) }}
+  {% call statement('drop_relation_for_materialization_change') -%}
+    drop {{ old_description }} {{ old_relation }}
+  {%- endcall %}
+  {% do adapter.cache_dropped(old_relation) %}
+  {{ return(none) }}
+{%- endmacro %}
+
 {% macro risingwave__create_view_as(relation, sql) -%}
     {{ risingwave__render_sql_header() }}
 
