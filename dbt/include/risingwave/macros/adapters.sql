@@ -407,6 +407,27 @@
   {{ return(modules.re.match("(?i)(?:select|with|values)\\b|\\(", body) is not none) }}
 {%- endmacro %}
 
+{#-
+  Renders one sink option value. Plain values become string literals with embedded quotes
+  escaped. `{'secret': '<name>'}` (optionally `<schema>.<name>`) references a RisingWave
+  secret instead, for example a password stored with the `secret` materialization.
+-#}
+{%- macro risingwave__sink_option_value(key, value) -%}
+  {%- if value is mapping -%}
+    {%- set secret_name = value.get('secret') -%}
+    {%- if value | length != 1 or secret_name is not string
+          or not modules.re.fullmatch('[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?', secret_name) -%}
+      {{ exceptions.raise_compiler_error(
+        "Invalid value for sink option `" ~ key ~ "`: use a plain value, or {'secret': '<secret name>'}"
+        ~ " with an optionally schema-qualified secret name, to reference a RisingWave secret."
+      ) }}
+    {%- endif -%}
+    secret {{ secret_name }}
+  {%- else -%}
+    '{{ value | string | replace("'", "''") }}'
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro risingwave__sink_ddl(relation, sql, replace_existing=false, from_relation=none) -%}
     {{ risingwave__render_sql_header() }}
 
@@ -429,16 +450,16 @@
       {%- endif %}
     {%- endif %}
     with (
-          connector = '{{ connector }}',
+          connector = {{ risingwave__sink_option_value('connector', connector) }},
           {%- for key, value in _connector_parameters.items() %}
-          {{ key }} = '{{ value }}'
+          {{ key }} = {{ risingwave__sink_option_value(key, value) }}
           {%- if not loop.last -%},{%- endif -%}
           {% endfor %}
       )
     {% if _format_parameters and data_format and data_encode -%}
     format {{ data_format }} encode {{ data_encode }} (
     {%- for key, value in _format_parameters.items() %}
-          {{ key }} = '{{ value }}'
+          {{ key }} = {{ risingwave__sink_option_value(key, value) }}
           {%- if not loop.last -%},{%- endif -%}
           {% endfor %}
     )
