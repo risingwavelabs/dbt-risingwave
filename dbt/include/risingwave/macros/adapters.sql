@@ -809,6 +809,61 @@
   alter materialized view {{ old_relation }} swap with {{ new_relation }}
 {%- endmacro %}
 
+{#-
+  A zero-downtime rebuild cuts over from the existing relation to a newly built temp
+  relation. It supports existing views and materialized views only; check this before
+  building the temp relation so an unsupported cut-over leaves nothing behind.
+-#}
+{%- macro risingwave__check_zero_downtime_relation(old_relation, target_relation) -%}
+  {%- if old_relation.type not in ['view', 'materialized_view', 'materializedview'] -%}
+    {{ exceptions.raise_compiler_error(
+      "Cannot rebuild " ~ target_relation ~ " with zero downtime: it exists as a "
+      ~ old_relation.type | replace('_', ' ')
+      ~ ", and zero-downtime rebuilds can only replace a view or a materialized view."
+      ~ " Run it without --vars 'zero_downtime: true', or with --full-refresh."
+    ) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#-
+  Cuts over to the new relation and returns the old relation under its temp name. Relations
+  of the same type are swapped atomically. RisingWave cannot swap a view with a materialized
+  view, so when the model switched between the two, the old relation is renamed out of the
+  way and the new one is renamed into place. The canonical name is missing only between
+  those two statements. Objects that depend on the old relation stay attached to it, as
+  they do after a swap.
+-#}
+{%- macro risingwave__zero_downtime_cut_over(old_relation, temp_relation, target_relation) -%}
+  {%- set old_type = 'materialized_view' if old_relation.type == 'materializedview' else old_relation.type -%}
+  {%- set new_type = 'materialized_view' if temp_relation.type == 'materializedview' else temp_relation.type -%}
+
+  {%- if old_type == new_type -%}
+    {% call statement('swap') -%}
+      {%- if new_type == 'view' -%}
+        {{ risingwave__swap_views(old_relation, temp_relation) }}
+      {%- else -%}
+        {{ risingwave__swap_materialized_views(old_relation, temp_relation) }}
+      {%- endif -%}
+    {%- endcall %}
+    {{ return(temp_relation) }}
+  {%- endif -%}
+
+  {%- set retired_relation = api.Relation.create(
+      identifier=temp_relation.identifier ~ '_old',
+      schema=temp_relation.schema,
+      database=temp_relation.database,
+      type=old_type
+  ) -%}
+  {{ log("Replacing " ~ old_type | replace('_', ' ') ~ " " ~ old_relation ~ " with a " ~ new_type | replace('_', ' ') ~ " by renaming, because the model's materialization changed.", info=True) }}
+  {% call statement('retire_old_relation') -%}
+    alter {{ old_type | replace('_', ' ') }} {{ old_relation }} rename to "{{ retired_relation.identifier }}"
+  {%- endcall %}
+  {% call statement('promote_new_relation') -%}
+    alter {{ new_type | replace('_', ' ') }} {{ temp_relation }} rename to "{{ target_relation.identifier }}"
+  {%- endcall %}
+  {{ return(retired_relation) }}
+{%- endmacro %}
+
 {%- macro risingwave__relation_has_dependents(relation) -%}
   {%- set relation_schema = relation.schema | replace("'", "''") -%}
   {%- set relation_identifier = relation.identifier | replace("'", "''") -%}

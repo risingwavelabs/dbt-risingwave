@@ -42,6 +42,8 @@
       {# Use zero downtime rebuild - both model config and user flag are enabled #}
       {{- log("Using zero downtime rebuild with SWAP for view update.") -}}
       
+      {{ risingwave__check_zero_downtime_relation(old_relation, target_relation) }}
+
       {%- set temp_suffix = modules.datetime.datetime.now(modules.pytz.timezone('UTC')).isoformat().replace('-', '').replace(':', '').replace('.', '_') -%}
       {%- set temp_identifier = target_relation.identifier ~ "_dbt_zero_down_tmp_" ~ temp_suffix -%}
       {%- set temp_relation = api.Relation.create(
@@ -59,18 +61,16 @@
       {# Step 2: Grant on the new view before cut-over; privileges move with it through the swap #}
       {% do apply_grants(temp_relation, grant_config, should_revoke=false) %}
 
-      {# Step 3: Swap the views #}
-      {% call statement('swap') -%}
-        {{ risingwave__swap_views(old_relation, temp_relation) }}
-      {%- endcall %}
+      {# Step 3: Cut over to the new view #}
+      {%- set retired_relation = risingwave__zero_downtime_cut_over(old_relation, temp_relation, target_relation) -%}
 
       {# Step 4: Conditionally drop the old view (now with temp name) #}
       {% if immediate_cleanup %}
-        {{- log("Attempting immediate cleanup of temporary view: " ~ temp_relation) -}}
-        {{ risingwave__drop_zero_downtime_temp_relation(temp_relation) }}
+        {{- log("Attempting immediate cleanup of temporary " ~ retired_relation.type | replace('_', ' ') ~ ": " ~ retired_relation) -}}
+        {{ risingwave__drop_zero_downtime_temp_relation(retired_relation) }}
       {% else %}
-        {{- log("Preserving temporary view for downstream dependencies: " ~ temp_relation) -}}
-        {{- log("Manual cleanup required: DROP VIEW IF EXISTS " ~ temp_relation ~ ";") -}}
+        {{- log("Preserving temporary " ~ retired_relation.type | replace('_', ' ') ~ " for downstream dependencies: " ~ retired_relation) -}}
+        {{- log("Manual cleanup required: DROP " ~ retired_relation.type | replace('_', ' ') | upper ~ " IF EXISTS " ~ retired_relation ~ ";") -}}
       {% endif %}
     {% else %}
       {# Zero downtime disabled - either model config or user flag is missing #}
