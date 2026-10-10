@@ -401,6 +401,23 @@ jobs:
       working-directory: tests/e2e/incremental
       env:
         DBT_RW_INCREMENTAL_EXPECT_STAGE: incremental
+    - name: dbt-run-schema-change-fails
+      run: |
+        for attempt in 1 2; do
+          if dbt run --select incremental_guarded; then
+            echo "incremental run with an unexpected schema change succeeded"
+            exit 1
+          fi
+        done
+      working-directory: tests/e2e/incremental
+      env:
+        DBT_RW_INCREMENTAL_GUARD_STAGE: changed
+    - name: dbt-run-after-failed-runs
+      run: dbt run --select incremental_guarded
+      working-directory: tests/e2e/incremental
+    - name: dbt-test-temp-cleanup
+      run: dbt test --select assert_incremental_temp_cleanup
+      working-directory: tests/e2e/incremental
     - name: reset-source-for-full-refresh
       run: dbt run-operation reset_incremental_source_for_full_refresh
       working-directory: tests/e2e/incremental
