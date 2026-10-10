@@ -467,6 +467,11 @@ RisingWave `DELETE` does not accept a target alias. Write `incremental_predicate
 against unqualified target columns, for example `["event_date >= current_date - 7"]`,
 rather than `DBT_INTERNAL_DEST.event_date`.
 
+RisingWave has no temporary tables, so each incremental run stages its new rows in a
+regular table named `<model>__dbt_tmp<digits>` in the model's schema. The adapter drops
+the table right after the incremental statement runs. If a run fails before that, the
+model's next run drops the table it left behind.
+
 ### Zero-Downtime Rebuilds
 
 `materialized_view` and `view` support swap-based zero-downtime rebuilds. Adapter-managed

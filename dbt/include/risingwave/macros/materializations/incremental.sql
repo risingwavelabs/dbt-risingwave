@@ -3,7 +3,11 @@
   -- relations
   {%- set existing_relation = load_cached_relation(this) -%}
   {%- set target_relation = this.incorporate(type='table') -%}
-  {%- set temp_relation = make_temp_relation(target_relation)-%}
+  {#-- RisingWave has no temporary tables, so the temp relation is a regular table. dbt-postgres
+       drops its schema for session-local temp tables; keep it in the model's schema instead so a
+       table left behind by a failed run is found and dropped by the model's next run. --#}
+  {%- set temp_relation = make_temp_relation(target_relation).incorporate(
+        path={"schema": target_relation.schema, "database": target_relation.database}) -%}
   {%- set intermediate_relation = make_intermediate_relation(target_relation)-%}
   {%- set backup_relation_type = 'table' if existing_relation is none else existing_relation.type -%}
   {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
@@ -28,6 +32,7 @@
   {% set grant_config = config.get('grants') %}
   {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
   {{ drop_relation_if_exists(preexisting_backup_relation) }}
+  {{ risingwave__drop_stale_temp_tables(temp_relation) }}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -43,7 +48,7 @@
       {% set need_swap = true %}
   {% else %}
     {% do run_query(risingwave__create_table_as(False, temp_relation, sql)) %}
-    {% do to_drop.append(temp_relation) %}
+    {% set temp_relation_created = true %}
     {% do adapter.expand_target_column_types(
              from_relation=temp_relation,
              to_relation=target_relation) %}
@@ -63,6 +68,12 @@
   {% call statement("main") %}
       {{ build_sql }}
   {% endcall %}
+
+  {#-- Only the strategy SQL reads the temp relation. Drop it right away so that a later failure
+       (grants, hooks, ...) cannot leave it behind. --#}
+  {% if temp_relation_created %}
+      {% do adapter.drop_relation(temp_relation) %}
+  {% endif %}
 
   {% if need_swap %}
       {% do adapter.rename_relation(target_relation, backup_relation) %}

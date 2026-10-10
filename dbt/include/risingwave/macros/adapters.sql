@@ -452,6 +452,37 @@
   {{ return(none) }}
 {%- endmacro %}
 
+{#-
+  Drops regular tables left behind by earlier failed incremental runs of the same model.
+  Temp relations are named `<identifier>__dbt_tmp<digits>` (dbt-postgres appends the
+  time of day), so leftovers share the current temp relation's name up to the digits.
+-#}
+{%- macro risingwave__drop_stale_temp_tables(temp_relation) -%}
+  {%- set name_prefix = modules.re.sub('[0-9]+$', '', temp_relation.identifier) -%}
+  {%- set stale_name_pattern = modules.re.escape(name_prefix) ~ '[0-9]+' -%}
+
+  {% call statement('list_stale_temp_tables', fetch_result=True) -%}
+    select rw_tables.name
+    from rw_catalog.rw_tables
+    join rw_catalog.rw_schemas on rw_tables.schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ temp_relation.schema | replace("'", "''") }}'
+      and starts_with(rw_tables.name, '{{ name_prefix | replace("'", "''") }}')
+  {%- endcall %}
+
+  {%- set result_table = load_result('list_stale_temp_tables').table -%}
+  {%- if result_table is not none -%}
+    {%- for row in result_table.rows -%}
+      {%- if modules.re.fullmatch(stale_name_pattern, row[0]) and row[0] != temp_relation.identifier -%}
+        {%- set stale_relation = temp_relation.incorporate(path={"identifier": row[0]}, type='table') -%}
+        {{ log("Dropping temp table " ~ stale_relation ~ " left behind by an earlier failed run.", info=True) }}
+        {% call statement('drop_stale_temp_table') -%}
+          drop table if exists {{ stale_relation }}
+        {%- endcall %}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro risingwave__create_view_as(relation, sql) -%}
     {{ risingwave__render_sql_header() }}
 
