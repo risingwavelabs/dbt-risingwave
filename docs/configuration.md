@@ -529,6 +529,36 @@ Supported sink-specific configs:
 | `format_parameters` | No | Extra format/encode options emitted inside `FORMAT ... ENCODE ... (...)`. |
 | `zero_downtime` | No | Set `{'enabled': true}` to allow an existing sink to be cut over with `REPLACE SINK` when the runtime flag is also enabled. |
 
+Values in `connector_parameters` and `format_parameters` are rendered as string literals,
+with embedded single quotes escaped. To reference a RisingWave secret instead, for example
+one created with the `secret` materialization, use `{'secret': '<secret name>'}`. The name
+may be schema-qualified:
+
+```sql
+{{ config(
+    materialized='sink',
+    connector='kafka',
+    connector_parameters={
+      'topic': 'orders',
+      'properties.bootstrap.server': '127.0.0.1:9092',
+      'properties.sasl.mechanism': 'PLAIN',
+      'properties.security.protocol': 'SASL_PLAINTEXT',
+      'properties.sasl.username': 'dbt',
+      'properties.sasl.password': {'secret': 'kafka_password'}
+    },
+    data_format='plain',
+    data_encode='json'
+) }}
+
+-- depends_on: {{ ref('kafka_password') }}
+
+select *
+from {{ ref('orders_mv') }}
+```
+
+This renders `properties.sasl.password = secret kafka_password`. The `depends_on` comment
+makes dbt create the secret model before the sink.
+
 Zero-downtime sink replacement requires a RisingWave build containing `REPLACE SINK`
 (planned for RisingWave v3.1.0). The current RisingWave implementation accepts only
 `REPLACE SINK ... FROM relation`, so the model body must render to one relation rather than

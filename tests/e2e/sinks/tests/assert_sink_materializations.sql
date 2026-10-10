@@ -89,3 +89,16 @@ where not exists (
       and rw_relations.relation_type = 'sink'
       and rw_relations.definition ilike '%FROM %selected_orders_mv%'
 )
+
+union all
+
+select 'escaped_option_blackhole_sink must keep the quoted option and reference the secret' as failure
+where not exists (
+    select 1
+    from rw_sinks
+    join rw_schemas on rw_sinks.schema_id = rw_schemas.id
+    where rw_schemas.name = '{{ target.schema }}'
+      and rw_sinks.name = 'escaped_option_blackhole_sink'
+      and rw_sinks.definition like '%e2e.note = ''it''''s quoted''%'
+      and rw_sinks.definition like '%e2e.password = secret sink_option_secret%'
+)
